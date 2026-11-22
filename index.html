@@ -431,13 +431,21 @@ let DICT=null;
 (async()=>{try{if(window.claude&&claude.use)DICT=await claude.use("dictation")}catch(e){DICT=null}})();
 const norm=t=>t.toLowerCase().replace(/[’']/g,"'").replace(/[^a-z' ]/g," ").replace(/\s+/g," ").trim();
 function lev(a,b){const m=[...Array(b.length+1).keys()];for(let i=1;i<=a.length;i++){let prev=m[0];m[0]=i;for(let j=1;j<=b.length;j++){const t=m[j];m[j]=Math.min(m[j]+1,m[j-1]+1,prev+(a[i-1]===b[j-1]?0:1));prev=t}}return m[b.length]}
+const NUM={"1":"one","2":"two","3":"three","4":"four","5":"five"};
+function pkey(w){w=w.toLowerCase().replace(/ph/g,"f").replace(/ck/g,"k").replace(/[cq]/g,"k").replace(/x/g,"ks").replace(/z/g,"s").replace(/v/g,"b").replace(/th/g,"t").replace(/(.)\1+/g,"$1");return w[0]+w.slice(1).replace(/[aeiouyhw]/g,"")}
+const ratio=(a,b)=>!a||!b?0:1-lev(a,b)/Math.max(a.length,b.length);
+function wordSim(x,w){if(x===w)return 1;return Math.max(ratio(x,w),ratio(pkey(x),pkey(w))*.75,(x.length>=3&&w.startsWith(x.slice(0,3)))?.7:0,(w.length>=3&&x.startsWith(w.slice(0,3)))?.7:0)}
 function autoStars(heard,target){
-  const h=norm(heard),t=norm(target);if(!h)return 0;
+  const h=norm(heard.replace(/\d/g,d=>" "+(NUM[d]||"")+" ")),t=norm(target);if(!h)return 0;
   if(h===t||(" "+h+" ").includes(" "+t+" "))return 3;
-  const sim=1-lev(h,t)/Math.max(h.length,t.length);
-  const words=t.split(" "),hw=h.split(" ");const hit=words.filter(w=>hw.some(x=>x===w||1-lev(x,w)/Math.max(x.length,w.length)>=.7)).length/words.length;
-  const sc=Math.max(sim,hit);return sc>=.75?2:1;
+  const tw=t.split(" "),hw=h.split(" ");
+  const per=tw.map(w=>Math.max(...hw.map(x=>wordSim(x,w))));
+  const avg=per.reduce((a,b)=>a+b,0)/per.length;
+  const whole=Math.max(ratio(h.replace(/ /g,""),t.replace(/ /g,"")),ratio(pkey(h.replace(/ /g,"")),pkey(t.replace(/ /g,"")))*.75);
+  const sc=Math.max(avg,whole);
+  return sc>=.8?3:sc>=.45?2:1;
 }
+let SOLO=false;try{SOLO=localStorage.getItem("ta1-srsolo")==="1"}catch(e){}
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition||null;
 const CAN_REC=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
 function tabSpeak(u,el){
@@ -472,7 +480,7 @@ function tabSpeak(u,el){
           <button data-s="2"><span>⭐⭐</span>Gần đúng</button>
           <button data-s="1"><span>⭐</span>Nói lại sau</button>
         </div>
-        ${auto?`<p class="how">Máy chấm theo việc nó nghe ra đúng từ hay không. Nếu máy nghe sai, phụ huynh tự chấm bằng 3 nút trên.</p>`:""}
+        ${auto?`<p class="how">Máy chấm dễ cho bé: nói gần đúng cũng được sao. Nói 2 lần mà máy chưa nghe được thì bố mẹ chấm bằng 3 nút trên.</p>`:""}
         <button class="btn" id="next" hidden>Tiếp ›</button>
       </div></div>`;
     $("#model",el).onclick=()=>speak(it.t);
@@ -489,13 +497,20 @@ function tabSpeak(u,el){
       fb.className="feedback "+(st>=2?"ok":"no")+" pop";fb.textContent="⭐".repeat(st)+" "+p;
       speak(p,0.9);nextB.hidden=false;
     }
+    let tries=0;
+    function parentTurn(msg){heard.textContent=msg;fb.className="feedback";fb.textContent="👂 Bố mẹ chấm giúp bé nhé";$("#rate",el).classList.add("pop")}
     function judge(cands){
+      tries++;
       const c=cands.filter(x=>x&&x.trim());
-      if(!c.length){heard.textContent="Máy chưa nghe rõ. Bấm micro, nói to và gần máy hơn nhé.";return}
+      if(!c.length){
+        if(tries>=2)parentTurn("Máy chưa nghe được giọng bé."+(audioURL?" Bấm ▶ nghe lại,":"")+" rồi bố mẹ bấm chấm sao bên dưới.");
+        else heard.textContent="Máy chưa nghe được. Bấm micro, nói to và rõ một lần nữa nhé.";
+        return;
+      }
       let best=0,bt=c[0];c.forEach(x=>{const st=autoStars(x,it.t);if(st>best){best=st;bt=x}});
       heard.textContent="Máy nghe được: \""+bt.trim()+"\"";
-      if(best>=2)award(best);
-      else{fb.className="feedback no shake";fb.textContent="Try again! 💪";speak("Try again!",0.9)}
+      if(best>=2||tries>=2)award(Math.max(best,1));
+      else{fb.className="feedback no shake";fb.textContent="Try again! 💪 Thử thêm 1 lần nhé";speak("Try again!",0.9)}
     }
     el.querySelectorAll("#rate button").forEach(b=>b.onclick=()=>award(+b.dataset.s));
     if(!mic)return;
@@ -519,41 +534,44 @@ function tabSpeak(u,el){
       };
       return;
     }
-    /* native: ghi âm (MediaRecorder) + nhận giọng (SpeechRecognition của Safari/Chrome) */
+    /* native: nhận giọng (SpeechRecognition) + ghi âm (MediaRecorder) để nghe lại.
+       Một số iPhone không nhận giọng khi đang ghi âm cùng lúc: nếu vậy tự chuyển sang chỉ nhận giọng (SOLO). */
     let busy=false;
     mic.onclick=async()=>{
       if(busy||done)return;busy=true;
       speechSynthesis&&speechSynthesis.cancel();
-      const limit=it.sent?6000:4000;
-      let stream=null,recd=null,chunks=[],cands=[],srOk=false,srErr="",finished=false,timer=null;
-      mic.classList.add("on");heard.textContent="Đang nghe… bé nói đi!";playB.hidden=true;
-      if(CAN_REC){try{
-        stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
+      const limit=it.sent?9000:7000;
+      const useRec=CAN_REC&&(!SR||!SOLO);
+      let stream=null,recd=null,chunks=[],cands=[],srOk=false,srErr="",finished=false,timer=null,gotSpeech=false;
+      mic.classList.add("on");heard.textContent="Đang nghe… bé nói đi!";
+      if(useRec){try{
+        stream=await navigator.mediaDevices.getUserMedia({audio:true});
         recd=new MediaRecorder(stream);recd.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
         recd.onstop=()=>{if(stream)stream.getTracks().forEach(t=>t.stop());
           if(chunks.length){if(audioURL)URL.revokeObjectURL(audioURL);audioURL=URL.createObjectURL(new Blob(chunks,{type:recd.mimeType||"audio/mp4"}));playB.hidden=false}};
         recd.start();
-      }catch(e){stream=null;recd=null;if(!SR){mic.classList.remove("on");busy=false;heard.textContent="Chưa được dùng micro. Hãy cho phép micro cho trang này (Cài đặt → Safari → Micrô), hoặc phụ huynh chấm bằng 3 nút dưới.";return}}}
+      }catch(e){stream=null;recd=null;if(!SR){mic.classList.remove("on");busy=false;heard.textContent="Chưa được dùng micro. Hãy cho phép micro cho trang này (Cài đặt → Safari → Micrô), hoặc bố mẹ chấm bằng 3 nút dưới.";return}}}
       const finish=()=>{if(finished)return;finished=true;clearTimeout(timer);mic.classList.remove("on");busy=false;
         if(recd&&recd.state!=="inactive")setTimeout(()=>{try{recd.stop()}catch(e){}},250);
-        if(srOk)judge(cands);
-        else if(srErr==="not-allowed"||srErr==="service-not-allowed")heard.textContent="Máy chưa được nhận giọng nói. Trên iPhone, bật Cài đặt → Siri và Đọc chính tả (Bàn phím → Bật Đọc chính tả). Tạm thời phụ huynh nghe lại và chấm bằng 3 nút.";
-        else if(!SR)heard.textContent="Máy này không tự chấm được. Bấm ▶ nghe lại rồi phụ huynh chấm bằng 3 nút.";
-        else if(!cands.length)heard.textContent="Máy chưa nghe rõ. Bấm micro, nói to và gần máy hơn nhé.";
-        else judge(cands);
+        if(srErr==="not-allowed"||srErr==="service-not-allowed"){parentTurn("Máy chưa được phép nhận giọng nói. Bật Cài đặt → Cài đặt chung → Bàn phím → Đọc chính tả. Tạm thời bố mẹ chấm bằng 3 nút.");return}
+        if(!SR){parentTurn("Máy này không tự chấm được. Bấm ▶ nghe lại rồi bố mẹ chấm bằng 3 nút.");return}
+        if(!cands.length&&useRec&&!SOLO){SOLO=true;try{localStorage.setItem("ta1-srsolo","1")}catch(e){}
+          heard.textContent="Máy vừa chuyển sang chế độ nghe tốt hơn. Bấm micro và nói lại nhé.";return}
+        judge(cands);
       };
       if(SR){
         try{
-          const rec=new SR();rec.lang="en-US";rec.interimResults=true;rec.maxAlternatives=5;rec.continuous=false;
-          rec.onresult=e=>{const r=e.results[e.results.length-1];const alts=[...r].map(a=>a.transcript);heard.textContent="… "+alts[0];
-            if(r.isFinal){srOk=true;cands.push(...alts);try{rec.stop()}catch(_){}} else {cands=cands.concat(alts.slice(0,1))}};
+          const rec=new SR();rec.lang="en-US";rec.interimResults=true;rec.maxAlternatives=10;rec.continuous=false;
+          rec.onspeechstart=()=>{gotSpeech=true};
+          rec.onresult=e=>{for(let k=e.resultIndex;k<e.results.length;k++){const r=e.results[k];const alts=[...r].map(a=>a.transcript);heard.textContent="… "+alts[0];cands.push(...alts);if(r.isFinal)srOk=true}
+            if(srOk){try{rec.stop()}catch(_){}}};
           rec.onerror=e=>{srErr=e.error||"error"};
           rec.onend=()=>finish();
           rec.start();
           timer=setTimeout(()=>{try{rec.stop()}catch(_){finish()}},limit);
-          setTimeout(finish,limit+2500);
+          setTimeout(finish,limit+3000);
         }catch(e){srErr="error";timer=setTimeout(finish,limit)}
-      }else{timer=setTimeout(finish,limit)}
+      }else{timer=setTimeout(finish,4000)}
     };
   }
   draw();
