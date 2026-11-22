@@ -199,6 +199,32 @@ details.note summary{font-weight:800;cursor:pointer;color:var(--teal);font-size:
 .copts .opt.painted{border-width:6px}
 .ynsent{font-family:var(--display);font-size:30px;font-weight:800;text-align:center;line-height:1.2}
 .xcards .card .en{font-size:26px}
+.map h3{font-size:21px}
+.shelf{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;margin:8px 0}
+.stk{aspect-ratio:1;border-radius:50%;display:grid;place-items:center;font-size:24px;background:var(--tile);border:2px solid var(--accent)}
+.stk.off{font-size:13px;font-weight:800;color:var(--muted);border:2px dashed var(--line);background:none}
+.gstage{position:relative;overflow:hidden;border-radius:18px;touch-action:none;user-select:none;-webkit-user-select:none}
+.gstage .it{position:absolute;left:0;top:0;will-change:transform;font-size:52px;line-height:1}
+.gstage .it .pic{font-size:52px;height:auto}.gstage .it .pic.two{font-size:32px}.gstage .it .pic svg{width:58px;height:58px}
+.runbg{height:280px;background:linear-gradient(#BFE6FF 0%,#E8F6FF 62%,#7CC56B 62%,#5FAE52 100%)}
+.bunny{position:absolute;left:16px;bottom:96px;font-size:64px;transition:transform .35s cubic-bezier(.3,1.6,.5,1)}
+.bunny.jump{transform:translateY(-70px) rotate(-12deg)}
+.hud{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.target-chip{display:inline-flex;align-items:center;gap:8px;background:var(--tile);border-radius:999px;padding:6px 14px;font-family:var(--display);font-size:22px;font-weight:800}
+.spark{position:absolute;font-size:30px;pointer-events:none;animation:spark .7s forwards}
+@keyframes spark{to{transform:translateY(-60px) scale(1.4);opacity:0}}
+.feedbg{height:360px;background:linear-gradient(#FFF1D6,#FFE2B8)}
+.animal{position:absolute;left:50%;top:18px;transform:translateX(-50%);font-size:110px;line-height:1;transition:transform .2s}
+.animal.munch{animation:munch .5s 2}
+@keyframes munch{50%{transform:translateX(-50%) scale(1.15,.9)}}
+.animal.nope{animation:nope .4s}
+@keyframes nope{25%{transform:translateX(-60%)}75%{transform:translateX(-40%)}}
+.say-bub{position:absolute;left:50%;top:140px;transform:translateX(-50%);background:var(--surface);color:var(--ink);border-radius:14px;padding:6px 12px;font-weight:800;white-space:nowrap;font-size:16px}
+.food{position:absolute;bottom:14px;width:23%;height:96px;border-radius:16px;background:var(--surface);display:grid;place-items:center;touch-action:none;will-change:transform}
+.food .pic{font-size:50px;height:auto}.food .pic.two{font-size:30px}.food .pic svg{width:54px;height:54px}
+.catchbg{height:400px;background:linear-gradient(#D7F0FF,#F4FBFF)}
+.basket{position:absolute;bottom:8px;left:0;font-size:64px;will-change:transform}
+@media (prefers-reduced-motion:reduce){.spark,.animal.munch,.animal.nope{animation:none}}
 .navu{display:flex;justify-content:space-between;gap:10px;margin-top:22px}
 </style>
 </head><body>
@@ -393,7 +419,7 @@ let ipaOn=true;try{ipaOn=localStorage.getItem("ta1-ipa")!=="0"}catch(e){}
 
 /* ---------- views ---------- */
 const app=$("#app");
-function route(){clearInterval(window._gt);
+function route(){stopGames();
   const m=location.hash.match(/^#u(\d{1,2})$/);
   const n=m?+m[1]:0;
   if(n>=1&&n<=16)renderUnit(n);else renderHome();
@@ -401,20 +427,28 @@ function route(){clearInterval(window._gt);
 }
 window.addEventListener("hashchange",route);
 
+const STICK=12;
+function starsOf(b){if(!b)return 0;const r=b[0]/b[1];return r>=.85?3:r>=.6?2:1}
+function unitStars(n){const o=store["u"+n]||{};return Object.values(o).reduce((a,b)=>a+starsOf(b),0)}
 function renderHome(){
   speechSynthesis&&speechSynthesis.cancel&&speechSynthesis.cancel();
   app.innerHTML=`
   <header class="hero">
     <h1>Tiếng Anh 1 <span>cùng con</span></h1>
-    <p class="muted">16 bài theo sách Tiếng Anh 1 Global Success. Mỗi ngày chọn một bài, học lần lượt 3 phần: Từ vựng, Mẫu câu, Bài tập. Bấm vào thẻ là nghe đọc.</p>
+    <p class="muted">16 bài theo sách Tiếng Anh 1 Global Success. Mỗi ngày chọn một bài: học Từ vựng, Mẫu câu, Luyện nói, làm Bài tập rồi chơi Trò chơi để nhận sao và sticker.</p>
   </header>
+  ${(()=>{const tot=U.reduce((a,u)=>a+unitStars(u.n),0);const st=U.filter(u=>unitStars(u.n)>=STICK);
+    return `<section class="note map"><h3>🗺️ Hành trình của bé: ${tot} ⭐</h3>
+    <p>Mỗi bài tập, trò chơi được 1–3 ⭐. Đủ ${STICK} ⭐ ở một unit là bé nhận <b>1 sticker</b>.</p>
+    <div class="shelf">${U.map(u=>unitStars(u.n)>=STICK?`<span class="stk" title="Unit ${u.n}">${u.w[1][1].startsWith("svg:")?"🏅":u.w[1][1].replace("2:","")}</span>`:`<span class="stk off">${u.n}</span>`).join("")}</div>
+    <p class="muted" style="margin:0">Đã có ${st.length}/16 sticker</p></section>`})()}
   <div class="units">${U.map(u=>{
     const done=["e1","e2","e3","e4","e5"].filter(e=>best(u.n,e)).length;
     return `<a class="ucard" href="#u${u.n}" style="color:inherit;text-decoration:none">
       <div class="row"><span class="num">Unit ${u.n}</span><span class="letter">${u.L}${u.L.toLowerCase()}</span></div>
       <div class="t">${esc(u.en)}</div><div class="v">${esc(u.vi)}</div>
       <div class="pics">${u.w.map(w=>w[1].startsWith("svg:")?"🔹":w[1].replace("2:","")).join(" ")}</div>
-      ${done?`<div class="prog">✓ Đã làm ${done}/5 bài tập</div>`:""}
+      ${unitStars(u.n)?`<div class="prog">⭐ ${unitStars(u.n)}${unitStars(u.n)>=STICK?" · 🏅 có sticker":""}</div>`:""}
     </a>`}).join("")}</div>
   <div class="help">
     <details class="note">
@@ -427,7 +461,7 @@ function renderHome(){
       <div class="voice">Giọng đang dùng: <b id="voiceName">đang tìm…</b></div>
       <div class="tools" style="margin-top:10px"><button class="btn small ghost" id="testVoice">🔊 Thử giọng</button></div>
     </details>
-    <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">Phiên bản 22/11 (bản 9) · có Luyện nói, Trò chơi và Nâng cao</p>
+    <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">Phiên bản 22/11 (bản 10) · có Luyện nói, 6 Trò chơi, Nâng cao và Sticker</p>
   </div>`;
   pickVoice();
   $("#testVoice").onclick=()=>speak("Hello! Let's learn English.");
@@ -456,7 +490,7 @@ function renderUnit(n){
     ${n<16?`<a class="btn small ghost" href="#u${n+1}" style="text-decoration:none">Unit ${n+1} ›</a>`:"<span></span>"}
   </nav>`;
   const tabs=[...app.querySelectorAll(".tabs button")];
-  const show=t=>{speechSynthesis&&speechSynthesis.cancel();clearInterval(window._gt);tabs.forEach(b=>b.setAttribute("aria-selected",b.dataset.t===t));
+  const show=t=>{speechSynthesis&&speechSynthesis.cancel();stopGames();tabs.forEach(b=>b.setAttribute("aria-selected",b.dataset.t===t));
     ({v:tabVocab,p:tabPattern,s:tabSpeak,x:tabEx,g:tabGame,a:tabAdv})[t](u,$("#pane"))};
   tabs.forEach(b=>b.onclick=()=>show(b.dataset.t));
   show("v");
@@ -685,18 +719,120 @@ function extraWords(u,box){
 }
 
 /* Tab Trò chơi */
+let GTOKEN=0;
+function stopGames(){GTOKEN++;clearInterval(window._gt);cancelAnimationFrame(window._raf)}
+function sfx(kind){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(AC.destination);
+  if(kind==="jump"){o.type="square";o.frequency.setValueAtTime(300,t);o.frequency.exponentialRampToValueAtTime(900,t+.18);g.gain.setValueAtTime(.08,t);g.gain.exponentialRampToValueAtTime(.001,t+.2);o.start(t);o.stop(t+.21)}
+  else if(kind==="win"){[523,659,784,1047].forEach((f,k)=>{const o2=AC.createOscillator(),g2=AC.createGain();o2.type="triangle";o2.frequency.value=f;o2.connect(g2);g2.connect(AC.destination);g2.gain.setValueAtTime(.15,t+k*.12);g2.gain.exponentialRampToValueAtTime(.001,t+k*.12+.25);o2.start(t+k*.12);o2.stop(t+k*.12+.26)});o.start(t);o.stop(t)}
+  else if(kind==="munch"){o.type="sawtooth";o.frequency.setValueAtTime(140,t);g.gain.setValueAtTime(.06,t);[0,.12,.24].forEach(d=>{g.gain.setValueAtTime(.06,t+d);g.gain.setValueAtTime(.001,t+d+.06)});o.start(t);o.stop(t+.32)}
+  else {o.start(t);o.stop(t)}}catch(e){}}
+function sparkle(stage,x,y,ch){const sp=document.createElement("span");sp.className="spark";sp.textContent=ch||"✨";sp.style.left=x+"px";sp.style.top=y+"px";stage.appendChild(sp);setTimeout(()=>sp.remove(),750)}
+function praise(){return PRAISE[Math.floor(Math.random()*PRAISE.length)]}
+
+/* Game 4: Thỏ nhặt đồ — đồ vật trôi qua, bé bấm đúng hình máy đọc để thỏ nhảy lên nhặt */
+function gRunner(u,box){
+  const tok=++GTOKEN;const W4=u.w.map(W);const GOAL=8;let got=0,miss=0,target=null;
+  box.innerHTML=`<div class="exbox"><div class="exhead"><h3>🐰 Thỏ nhặt đồ</h3><span class="score" id="sc">⭐ 0/${GOAL}</span></div>
+    <p class="how">Nghe máy đọc. Khi đúng hình chạy tới, bé bấm vào hình để thỏ nhảy lên nhặt!</p>
+    <div class="hud"><span class="target-chip">🎯 <span id="tw">…</span></span><button class="mini-say" id="ls" aria-label="Nghe lại">🔊</button></div>
+    <div class="gstage runbg" id="st"><div class="bunny" id="bn">🐰</div><button class="btn" id="go" style="position:absolute;left:50%;top:40%;transform:translate(-50%,-50%)">▶ Bắt đầu</button></div>
+    <div class="feedback" id="fb"></div></div>`;
+  const st=$("#st",box),bn=$("#bn",box),fb=$("#fb",box);let items=[],last=0,spawnT=0,sinceTarget=0;
+  const newTarget=()=>{target=W4[Math.floor(Math.random()*4)];$("#tw",box).textContent=target.en;speak(target.en)};
+  $("#ls",box).onclick=()=>target&&speak(target.en);
+  function spawn(){const W=st.clientWidth;sinceTarget++;
+    const w=(sinceTarget>=2||Math.random()<.45)?target:W4[Math.floor(Math.random()*4)];if(w===target)sinceTarget=0;
+    const el=document.createElement("button");el.className="it";el.innerHTML=picHTML(w.pic);el.style.background="none";
+    const y=150+Math.random()*30;const it={el,w,x:W+10,y,dead:false};el.style.transform=`translate3d(${it.x}px,${y}px,0)`;
+    el.onpointerdown=e=>{e.preventDefault();if(it.dead)return;
+      if(w.en===target.en){it.dead=true;got++;bn.classList.add("jump");sfx("jump");setTimeout(()=>bn.classList.remove("jump"),380);
+        sparkle(st,it.x+10,it.y-10,"⭐");el.style.transition="transform .35s,opacity .35s";el.style.transform=`translate3d(30px,${it.y-80}px,0) scale(.3)`;el.style.opacity="0";setTimeout(()=>el.remove(),400);
+        $("#sc",box).textContent=`⭐ ${got}/${GOAL}`;fb.className="feedback ok pop";const p=praise();fb.textContent=p;
+        if(got>=GOAL){finish();return}speak(p,0.95,()=>{if(tok===GTOKEN)newTarget()})}
+      else{miss++;beep(false);el.classList.remove("shake");void el.offsetWidth;el.classList.add("shake");fb.className="feedback no";fb.textContent="Oops! Đó là "+w.en}};
+    st.appendChild(el);items.push(it)}
+  function loop(t){if(tok!==GTOKEN)return;const dt=Math.min(.05,(t-(last||t))/1000);last=t;spawnT-=dt;
+    if(spawnT<=0){spawn();spawnT=1.7}
+    items.forEach(it=>{if(it.dead)return;it.x-=85*dt;it.el.style.transform=`translate3d(${it.x}px,${it.y}px,0)`;if(it.x<-80){it.dead=true;it.el.remove()}});
+    items=items.filter(i=>!i.dead||i.el.isConnected);window._raf=requestAnimationFrame(loop)}
+  function finish(){cancelAnimationFrame(window._raf);sfx("win");const stv=miss<=1?3:miss<=3?2:1;setBest(u.n,"g4",stv,3);
+    setTimeout(()=>{if(tok===GTOKEN)gameEnd(box,"🐰 Thỏ nhặt đồ",got+" món",stv,"Bấm nhầm ít lần thì được nhiều sao.",()=>gRunner(u,box))},700)}
+  $("#go",box).onclick=()=>{$("#go",box).remove();newTarget();window._raf=requestAnimationFrame(loop)};
+}
+
+/* Game 5: Cho gấu ăn — kéo (hoặc bấm) đúng món gấu xin */
+function gFeed(u,box){
+  const tok=++GTOKEN;const W4=u.w.map(W);const animal=["🐻","🐶","🐵","🐱"][u.n%4];const rounds=shuffle([...W4,...shuffle(W4)]).slice(0,6);let r=0,score=0,first=true;
+  box.innerHTML=`<div class="exbox"><div class="exhead"><h3>${animal} Cho bạn ăn</h3><span class="score" id="sc">1/${rounds.length} · ⭐ 0</span></div>
+    <p class="how">Nghe bạn ${animal} xin gì, rồi kéo (hoặc bấm) đúng hình đưa vào miệng bạn ấy.</p>
+    <div class="gstage feedbg" id="st"><div class="animal" id="an">${animal}</div><div class="say-bub" id="bub">…</div></div>
+    <div class="feedback" id="fb"></div></div>`;
+  const st=$("#st",box),an=$("#an",box),fb=$("#fb",box),bub=$("#bub",box);
+  function round(){if(tok!==GTOKEN)return;
+    if(r>=rounds.length){sfx("win");const stv=score>=6?3:score>=4?2:1;setBest(u.n,"g5",stv,3);return gameEnd(box,animal+" Cho bạn ăn",score+"/"+rounds.length,stv,"Đưa đúng ngay lần đầu thì được điểm.",()=>gFeed(u,box))}
+    const w=rounds[r];first=true;$("#sc",box).textContent=`${r+1}/${rounds.length} · ⭐ ${score}`;
+    const line="Give me the "+w.en+", please!";bub.textContent="🔊 "+line;bub.onclick=()=>speak(line);speak(line);
+    st.querySelectorAll(".food").forEach(f=>f.remove());
+    shuffle(W4).forEach((o,k)=>{const f=document.createElement("div");f.className="food";f.style.left=(2+k*24.5)+"%";f.innerHTML=picHTML(o.pic);st.appendChild(f);
+      let sx=0,sy=0,dx=0,dy=0,drag=false;
+      f.onpointerdown=e=>{e.preventDefault();f.setPointerCapture(e.pointerId);sx=e.clientX;sy=e.clientY;drag=true;f.style.transition="none";f.style.zIndex=5};
+      f.onpointermove=e=>{if(!drag)return;dx=e.clientX-sx;dy=e.clientY-sy;f.style.transform=`translate3d(${dx}px,${dy}px,0) scale(1.1)`};
+      f.onpointerup=e=>{if(!drag)return;drag=false;const tap=Math.abs(dx)+Math.abs(dy)<12;const a=an.getBoundingClientRect(),b=f.getBoundingClientRect();
+        const over=b.top<a.bottom+20&&b.right>a.left&&b.left<a.right;dx=dy=0;
+        if(tap||over)give(o,f);else{f.style.transition="transform .25s";f.style.transform=""}};
+    })}
+  function give(o,f){if(tok!==GTOKEN)return;const w=rounds[r];
+    const a=an.getBoundingClientRect(),b=f.getBoundingClientRect();f.style.transition="transform .4s,opacity .4s";
+    if(o.en===w.en){if(first)score++;f.style.transform=`translate3d(${a.left+a.width/2-b.left-b.width/2}px,${a.top+40-b.top}px,0) scale(.2)`;f.style.opacity="0";
+      st.querySelectorAll(".food").forEach(x=>x.style.pointerEvents="none");
+      setTimeout(()=>{an.classList.add("munch");sfx("munch");sparkle(st,st.clientWidth/2-10,40,"❤️");sparkle(st,st.clientWidth/2+30,60,"❤️")},350);
+      fb.className="feedback ok pop";fb.textContent="Yum yum! "+praise();
+      setTimeout(()=>speak("Yum yum! Thank you!",0.9,()=>{an.classList.remove("munch");r++;round()}),500)}
+    else{first=false;f.style.transform="";an.classList.remove("nope");void an.offsetWidth;an.classList.add("nope");beep(false);fb.className="feedback no";fb.textContent="No, thanks! Đó là "+o.en;speak("No, thanks!",0.9)}}
+  round();
+}
+
+/* Game 6: Hứng quà rơi — di ngón tay để kéo giỏ hứng đúng hình */
+function gCatch(u,box){
+  const tok=++GTOKEN;const W4=u.w.map(W);let score=0,left=40,target=null,caughtT=0;
+  box.innerHTML=`<div class="exbox"><div class="exhead"><h3>🧺 Hứng quà rơi</h3><span class="score" id="sc">⭐ 0 · ⏱ 40</span></div>
+    <p class="how">Di ngón tay trong khung để kéo giỏ. Chỉ hứng đúng hình máy đọc!</p>
+    <div class="hud"><span class="target-chip">🎯 <span id="tw">…</span></span><button class="mini-say" id="ls" aria-label="Nghe lại">🔊</button></div>
+    <div class="gstage catchbg" id="st"><div class="basket" id="bk">🧺</div><button class="btn" id="go" style="position:absolute;left:50%;top:40%;transform:translate(-50%,-50%)">▶ Bắt đầu</button></div>
+    <div class="feedback" id="fb"></div></div>`;
+  const st=$("#st",box),bk=$("#bk",box),fb=$("#fb",box);let bx=0,items=[],last=0,spawnT=0;
+  const H=()=>st.clientHeight,Wd=()=>st.clientWidth;
+  const setB=x=>{bx=Math.max(0,Math.min(Wd()-70,x-35));bk.style.transform=`translate3d(${bx}px,0,0)`};setB(Wd()/2);
+  st.onpointerdown=st.onpointermove=e=>{const r=st.getBoundingClientRect();setB(e.clientX-r.left)};
+  const newTarget=()=>{let n;do{n=W4[Math.floor(Math.random()*4)]}while(target&&n.en===target.en);target=n;$("#tw",box).textContent=target.en;speak(target.en);caughtT=0};
+  $("#ls",box).onclick=()=>target&&speak(target.en);
+  function spawn(){const w=Math.random()<.45?target:W4[Math.floor(Math.random()*4)];const el=document.createElement("div");el.className="it";el.innerHTML=picHTML(w.pic);el.style.pointerEvents="none";
+    const it={el,w,x:10+Math.random()*(Wd()-80),y:-60,v:70+Math.random()*40,dead:false};st.appendChild(el);items.push(it)}
+  function loop(t){if(tok!==GTOKEN)return;const dt=Math.min(.05,(t-(last||t))/1000);last=t;spawnT-=dt;if(spawnT<=0){spawn();spawnT=1.0}
+    const by=H()-70;
+    items.forEach(it=>{if(it.dead)return;it.y+=it.v*dt;it.el.style.transform=`translate3d(${it.x}px,${it.y}px,0)`;
+      if(it.y+50>=by&&it.y<by+30&&Math.abs((it.x+28)-(bx+35))<55){it.dead=true;it.el.remove();
+        if(it.w.en===target.en){score++;caughtT++;beep(true);sparkle(st,bx+20,by-30,"⭐");fb.className="feedback ok pop";fb.textContent=praise();$("#sc",box).textContent=`⭐ ${score} · ⏱ ${left}`;if(caughtT>=3)newTarget()}
+        else{beep(false);fb.className="feedback no";fb.textContent="Oops! Đó là "+it.w.en}}
+      else if(it.y>H()){it.dead=true;it.el.remove()}});
+    items=items.filter(i=>!i.dead);window._raf=requestAnimationFrame(loop)}
+  $("#go",box).onclick=e=>{e.stopPropagation();$("#go",box).remove();newTarget();window._raf=requestAnimationFrame(loop);
+    window._gt=setInterval(()=>{if(tok!==GTOKEN)return;left--;$("#sc",box).textContent=`⭐ ${score} · ⏱ ${left}`;
+      if(left<=0){stopGames();sfx("win");const stv=score>=12?3:score>=7?2:1;setBest(u.n,"g6",stv,3);gameEnd(box,"🧺 Hứng quà rơi",score+" món",stv,"Trong 40 giây, hứng được 12 món đúng là 3 sao.",()=>gCatch(u,box))}},1000)};
+}
+
 let AC=null;
 function beep(ok){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),g=AC.createGain();o.type="triangle";
   const t=AC.currentTime;o.frequency.setValueAtTime(ok?660:220,t);if(ok)o.frequency.setValueAtTime(880,t+.09);
   g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+.3);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+.32)}catch(e){}}
-const GAMES=[["g1","Lật thẻ tìm cặp"],["g2","Bắn bóng bay"],["g3","Đúng hay sai?"]];
+const GAMES=[["g4","🐰 Thỏ nhặt đồ"],["g5","🐾 Cho thú ăn"],["g6","🧺 Hứng quà rơi"],["g1","Lật thẻ tìm cặp"],["g2","Bắn bóng bay"],["g3","Đúng hay sai?"]];
 function tabGame(u,el){
   el.innerHTML=`<div class="pane">
-    <div class="chips" role="tablist">${GAMES.map((g,k)=>{const b=best(u.n,g[0]);return `<button data-g="${g[0]}" aria-selected="${k===0}">${g[1]}${b?`<span class="best">${b[0]}</span>`:""}</button>`}).join("")}</div>
+    <div class="chips" role="tablist">${GAMES.map((g,k)=>{const b=best(u.n,g[0]);return `<button data-g="${g[0]}" aria-selected="${k===0}">${g[1]}${b?`<span class="best">${"⭐".repeat(b[0])}</span>`:""}</button>`}).join("")}</div>
     <div id="gbox"></div></div>`;
   const chips=[...el.querySelectorAll(".chips button")],box=$("#gbox",el);
-  const open=g=>{speechSynthesis&&speechSynthesis.cancel();clearInterval(window._gt);chips.forEach(c=>c.setAttribute("aria-selected",c.dataset.g===g));({g1:gMemory,g2:gBalloon,g3:gTrueFalse})[g](u,box)};
-  chips.forEach(c=>c.onclick=()=>open(c.dataset.g));open("g1");
+  const open=g=>{speechSynthesis&&speechSynthesis.cancel();stopGames();chips.forEach(c=>c.setAttribute("aria-selected",c.dataset.g===g));({g1:gMemory,g2:gBalloon,g3:gTrueFalse,g4:gRunner,g5:gFeed,g6:gCatch})[g](u,box)};
+  chips.forEach(c=>c.onclick=()=>open(c.dataset.g));open("g4");
 }
 function gameEnd(box,title,big,stars,note,again){
   const msg=stars===3?"Excellent!":stars===2?"Good job!":"Nice try!";
