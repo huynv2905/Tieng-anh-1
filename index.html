@@ -445,6 +445,15 @@ function autoStars(heard,target){
   const sc=Math.max(avg,whole);
   return sc>=.8?3:sc>=.45?2:1;
 }
+let STRICT=false;try{STRICT=localStorage.getItem("ta1-strict")==="1"}catch(e){}
+function easyStars(heard,target){
+  const h=norm(heard),t=norm(target);if(!h)return 0;
+  if(autoStars(heard,target)>=2)return 3;
+  const f=t.replace(/^(i |he's |she's |it's |this is |that's |there's |look at |touch your |point to your |how many |hi |bye )/,"").trim()||t;
+  const hw=h.split(" ");
+  const close=hw.some(x=>x[0]===f[0]||pkey(x)[0]===pkey(f)[0]||ratio(x,f)>=.35||ratio(pkey(x),pkey(f))>=.4);
+  return close?3:2;
+}
 let SOLO=false;try{SOLO=localStorage.getItem("ta1-srsolo")==="1"}catch(e){}
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition||null;
 const CAN_REC=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
@@ -480,10 +489,11 @@ function tabSpeak(u,el){
           <button data-s="2"><span>⭐⭐</span>Gần đúng</button>
           <button data-s="1"><span>⭐</span>Nói lại sau</button>
         </div>
-        ${auto?`<p class="how">Máy chấm dễ cho bé: nói gần đúng cũng được sao. Nói 2 lần mà máy chưa nghe được thì bố mẹ chấm bằng 3 nút trên.</p>`:""}
+        ${auto?`<p class="how">${STRICT?"Chế độ chấm khó: phải nói gần giống người bản xứ mới được 3 sao.":"Chế độ chấm dễ: bé nói là có sao, nói gần đúng được 3 sao."} Nếu máy chưa nghe được, bố mẹ chấm bằng 3 nút trên.</p><label class="toggle" style="justify-content:center"><input type="checkbox" id="strict" ${STRICT?"checked":""}> Chấm khó (cho bé đã giỏi)</label><p hidden></p>`:""}
         <button class="btn" id="next" hidden>Tiếp ›</button>
       </div></div>`;
     $("#model",el).onclick=()=>speak(it.t);
+    const sk=$("#strict",el);if(sk)sk.onchange=()=>{STRICT=sk.checked;try{localStorage.setItem("ta1-strict",STRICT?"1":"0")}catch(e){};draw()};
     const pk=$("#peek",el);if(pk)pk.onclick=()=>{showWord=!showWord;$("#tg",el).classList.toggle("hidden",!showWord);pk.textContent=showWord?"Ẩn chữ":"Hiện chữ"};
     const fb=$("#fb",el),heard=$("#heard",el),mic=$("#mic",el),playB=$("#play",el),nextB=$("#next",el);
     let audioURL=null,done=false;
@@ -499,17 +509,19 @@ function tabSpeak(u,el){
     }
     let tries=0;
     function parentTurn(msg){heard.textContent=msg;fb.className="feedback";fb.textContent="👂 Bố mẹ chấm giúp bé nhé";$("#rate",el).classList.add("pop")}
-    function judge(cands){
+    function judge(cands,spoke){
       tries++;
       const c=cands.filter(x=>x&&x.trim());
       if(!c.length){
+        if(!STRICT&&spoke){heard.textContent="Máy nghe thấy bé nói nhưng chưa rõ chữ.";award(2);return}
         if(tries>=2)parentTurn("Máy chưa nghe được giọng bé."+(audioURL?" Bấm ▶ nghe lại,":"")+" rồi bố mẹ bấm chấm sao bên dưới.");
         else heard.textContent="Máy chưa nghe được. Bấm micro, nói to và rõ một lần nữa nhé.";
         return;
       }
-      let best=0,bt=c[0];c.forEach(x=>{const st=autoStars(x,it.t);if(st>best){best=st;bt=x}});
+      const sc=STRICT?autoStars:easyStars;
+      let best=0,bt=c[0];c.forEach(x=>{const st=sc(x,it.t);if(st>best){best=st;bt=x}});
       heard.textContent="Máy nghe được: \""+bt.trim()+"\"";
-      if(best>=2||tries>=2)award(Math.max(best,1));
+      if(!STRICT||best>=2||tries>=2)award(Math.max(best,STRICT?1:2));
       else{fb.className="feedback no shake";fb.textContent="Try again! 💪 Thử thêm 1 lần nhé";speak("Try again!",0.9)}
     }
     el.querySelectorAll("#rate button").forEach(b=>b.onclick=()=>award(+b.dataset.s));
@@ -557,13 +569,13 @@ function tabSpeak(u,el){
         if(!SR){parentTurn("Máy này không tự chấm được. Bấm ▶ nghe lại rồi bố mẹ chấm bằng 3 nút.");return}
         if(!cands.length&&useRec&&!SOLO){SOLO=true;try{localStorage.setItem("ta1-srsolo","1")}catch(e){}
           heard.textContent="Máy vừa chuyển sang chế độ nghe tốt hơn. Bấm micro và nói lại nhé.";return}
-        judge(cands);
+        judge(cands,gotSpeech);
       };
       if(SR){
         try{
           const rec=new SR();rec.lang="en-US";rec.interimResults=true;rec.maxAlternatives=10;rec.continuous=false;
           rec.onspeechstart=()=>{gotSpeech=true};
-          rec.onresult=e=>{for(let k=e.resultIndex;k<e.results.length;k++){const r=e.results[k];const alts=[...r].map(a=>a.transcript);heard.textContent="… "+alts[0];cands.push(...alts);if(r.isFinal)srOk=true}
+          rec.onresult=e=>{gotSpeech=true;for(let k=e.resultIndex;k<e.results.length;k++){const r=e.results[k];const alts=[...r].map(a=>a.transcript);heard.textContent="… "+alts[0];cands.push(...alts);if(r.isFinal)srOk=true}
             if(srOk){try{rec.stop()}catch(_){}}};
           rec.onerror=e=>{srErr=e.error||"error"};
           rec.onend=()=>finish();
