@@ -4,6 +4,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Tiếng Anh 1">
 <meta name="theme-color" content="#EAF4F1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📕%3C/text%3E%3C/svg%3E">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Tiếng Anh 1 cùng con</title>
@@ -380,6 +382,7 @@ function renderHome(){
       <div class="voice">Giọng đang dùng: <b id="voiceName">đang tìm…</b></div>
       <div class="tools" style="margin-top:10px"><button class="btn small ghost" id="testVoice">🔊 Thử giọng</button></div>
     </details>
+    <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">Phiên bản 22/11 · có Luyện nói và Trò chơi</p>
   </div>`;
   pickVoice();
   $("#testVoice").onclick=()=>speak("Hello! Let's learn English.");
