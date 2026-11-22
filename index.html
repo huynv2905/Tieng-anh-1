@@ -68,8 +68,8 @@ details.note summary{font-weight:800;cursor:pointer;color:var(--teal);font-size:
 .utitle .k{font-size:13px;font-weight:800;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
 .utitle h2{font-size:24px}
 .utitle .bigL{color:var(--accent);text-transform:none}
-.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:5px}
-.tabs button{min-height:50px;border-radius:12px;font-weight:800;font-size:15px;line-height:1.1;padding:0 2px}
+.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:5px}
+.tabs button{min-height:50px;border-radius:12px;font-weight:800;font-size:14px;line-height:1.1;padding:0 2px}
 .tabs button[aria-selected="true"]{background:var(--teal);color:var(--surface)}
 .pane{display:grid;gap:14px;margin-top:14px}
 .tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
@@ -161,6 +161,27 @@ details.note summary{font-weight:800;cursor:pointer;color:var(--teal);font-size:
 .rate{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:100%}
 .rate button{min-height:84px;border-radius:16px;background:var(--tile);border:2px solid var(--line);font-weight:800;font-size:14.5px;display:grid;place-items:center;gap:2px;padding:6px}
 .rate button span{font-size:22px}
+.mem{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.mc{aspect-ratio:3/4;max-width:100%;border-radius:14px;background:var(--accent);color:var(--accent-ink);font-family:var(--display);font-size:34px;font-weight:800;display:grid;place-items:center;padding:4px;transition:transform .25s}
+.mc.open{background:var(--tile);color:var(--ink);transform:rotateY(0)}
+.mc.open .pic{font-size:40px;height:auto}.mc.open .pic.two{font-size:26px}.mc.open .pic svg{width:46px;height:46px}
+.mc .w{font-size:17px;line-height:1.1;word-break:break-word;text-align:center}
+.mc.done{background:var(--good-soft);border:2px solid var(--good)}
+.sky{position:relative;height:330px;border-radius:18px;background:linear-gradient(var(--teal-soft),var(--bg));overflow:hidden;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;padding:10px 4px 18px}
+.bl{justify-self:center;width:min(78px,21vw);height:min(96px,26vw);border-radius:50% 50% 48% 48%;display:grid;place-items:center;position:relative;animation:bob 2.4s ease-in-out infinite;transition:transform .3s,opacity .3s}
+.bl::after{content:"";position:absolute;bottom:-34px;left:50%;width:2px;height:34px;background:var(--muted)}
+.bl .pic{font-size:36px;height:auto}.bl .pic.two{font-size:22px}.bl .pic svg{width:42px;height:42px}
+.bl.pop{transform:scale(1.6);opacity:0}
+.bl:nth-child(2){animation-delay:-.6s}.bl:nth-child(3){animation-delay:-1.2s}.bl:nth-child(4){animation-delay:-1.8s}
+@keyframes bob{0%,100%{translate:0 0}50%{translate:0 -60px}}
+.tfpic .pic{font-size:96px;height:110px}.tfpic .pic svg{width:100px;height:100px}
+.tfword{font-family:var(--display);font-size:40px;font-weight:800;text-align:center}
+.tfbtns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tfbtns button{min-height:90px;border-radius:18px;font-size:30px;font-weight:800;font-family:var(--display)}
+.tfbtns .yes{background:var(--good-soft);border:3px solid var(--good);color:var(--good)}
+.tfbtns .no{background:var(--bad-soft);border:3px solid var(--bad);color:var(--bad)}
+.timer{height:12px;border-radius:6px;background:var(--line);overflow:hidden}.timer i{display:block;height:100%;background:var(--accent);transition:width 1s linear}
+@media (prefers-reduced-motion:reduce){.bl{animation:none}}
 .navu{display:flex;justify-content:space-between;gap:10px;margin-top:22px}
 </style>
 </head><body>
@@ -325,7 +346,7 @@ let ipaOn=true;try{ipaOn=localStorage.getItem("ta1-ipa")!=="0"}catch(e){}
 
 /* ---------- views ---------- */
 const app=$("#app");
-function route(){
+function route(){clearInterval(window._gt);
   const m=location.hash.match(/^#u(\d{1,2})$/);
   const n=m?+m[1]:0;
   if(n>=1&&n<=16)renderUnit(n);else renderHome();
@@ -377,6 +398,7 @@ function renderUnit(n){
       <button role="tab" data-t="p" aria-selected="false">Mẫu câu</button>
       <button role="tab" data-t="s" aria-selected="false">Luyện nói</button>
       <button role="tab" data-t="x" aria-selected="false">Bài tập</button>
+      <button role="tab" data-t="g" aria-selected="false">Trò chơi</button>
     </div>
   </div>
   <div id="pane"></div>
@@ -385,8 +407,8 @@ function renderUnit(n){
     ${n<16?`<a class="btn small ghost" href="#u${n+1}" style="text-decoration:none">Unit ${n+1} ›</a>`:"<span></span>"}
   </nav>`;
   const tabs=[...app.querySelectorAll(".tabs button")];
-  const show=t=>{speechSynthesis&&speechSynthesis.cancel();tabs.forEach(b=>b.setAttribute("aria-selected",b.dataset.t===t));
-    ({v:tabVocab,p:tabPattern,s:tabSpeak,x:tabEx})[t](u,$("#pane"))};
+  const show=t=>{speechSynthesis&&speechSynthesis.cancel();clearInterval(window._gt);tabs.forEach(b=>b.setAttribute("aria-selected",b.dataset.t===t));
+    ({v:tabVocab,p:tabPattern,s:tabSpeak,x:tabEx,g:tabGame})[t](u,$("#pane"))};
   tabs.forEach(b=>b.onclick=()=>show(b.dataset.t));
   show("v");
 }
@@ -587,6 +609,92 @@ function tabSpeak(u,el){
     };
   }
   draw();
+}
+
+/* Tab Trò chơi */
+let AC=null;
+function beep(ok){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),g=AC.createGain();o.type="triangle";
+  const t=AC.currentTime;o.frequency.setValueAtTime(ok?660:220,t);if(ok)o.frequency.setValueAtTime(880,t+.09);
+  g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+.3);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+.32)}catch(e){}}
+const GAMES=[["g1","Lật thẻ tìm cặp"],["g2","Bắn bóng bay"],["g3","Đúng hay sai?"]];
+function tabGame(u,el){
+  el.innerHTML=`<div class="pane">
+    <div class="chips" role="tablist">${GAMES.map((g,k)=>{const b=best(u.n,g[0]);return `<button data-g="${g[0]}" aria-selected="${k===0}">${g[1]}${b?`<span class="best">${b[0]}</span>`:""}</button>`}).join("")}</div>
+    <div id="gbox"></div></div>`;
+  const chips=[...el.querySelectorAll(".chips button")],box=$("#gbox",el);
+  const open=g=>{speechSynthesis&&speechSynthesis.cancel();clearInterval(window._gt);chips.forEach(c=>c.setAttribute("aria-selected",c.dataset.g===g));({g1:gMemory,g2:gBalloon,g3:gTrueFalse})[g](u,box)};
+  chips.forEach(c=>c.onclick=()=>open(c.dataset.g));open("g1");
+}
+function gameEnd(box,title,big,stars,note,again){
+  const msg=stars===3?"Excellent!":stars===2?"Good job!":"Nice try!";
+  box.innerHTML=`<div class="exbox"><div class="exhead"><h3>${title}</h3></div><div class="result"><div class="stars">${"⭐".repeat(stars)}</div><div class="big">${big}</div><div class="feedback ok">${msg}</div><p class="how">${note}</p><button class="btn" id="again">↻ Chơi lại</button></div></div>`;
+  speak(msg,0.9);$("#again",box).onclick=again;
+}
+function gMemory(u,box){
+  const W4=u.w.map(W);let cards=shuffle([...W4.map(w=>({w,t:"p"})),...W4.map(w=>({w,t:"w"}))]);
+  let openC=[],moves=0,pairs=0,lock=false;
+  box.innerHTML=`<div class="exbox"><div class="exhead"><h3>Lật thẻ tìm cặp</h3><span class="score" id="mv">Lượt: 0</span></div>
+    <p class="how">Lật 2 thẻ: tìm hình và chữ giống nhau. Mỗi thẻ lật lên sẽ đọc to.</p>
+    <div class="mem">${cards.map((c,k)=>`<button class="mc" data-k="${k}" aria-label="Thẻ ${k+1}">?</button>`).join("")}</div>
+    <div class="feedback" id="fb"></div></div>`;
+  const bs=[...box.querySelectorAll(".mc")],fb=$("#fb",box);
+  const face=c=>c.t==="p"?picHTML(c.w.pic):`<span class="w">${esc(c.w.en)}</span>`;
+  bs.forEach(b=>b.onclick=()=>{
+    const c=cards[b.dataset.k];if(lock||b.classList.contains("open"))return;
+    b.classList.add("open");b.innerHTML=face(c);speak(c.w.en);openC.push(b);
+    if(openC.length<2)return;
+    moves++;$("#mv",box).textContent="Lượt: "+moves;lock=true;
+    const [x,y]=openC.map(o=>cards[o.dataset.k]);
+    if(x.w.en===y.w.en){openC.forEach(o=>o.classList.add("done"));openC=[];pairs++;lock=false;beep(true);
+      const p=PRAISE[Math.floor(Math.random()*PRAISE.length)];fb.className="feedback ok pop";fb.textContent=p+" 🎉";
+      if(pairs===4){const st=moves<=6?3:moves<=9?2:1;setBest(u.n,"g1",st,3);setTimeout(()=>gameEnd(box,"Lật thẻ tìm cặp",moves+" lượt",st,"Càng ít lượt càng giỏi. 6 lượt trở xuống được 3 sao.",()=>gMemory(u,box)),1300)}
+      else setTimeout(()=>speak(p,0.9),700);
+    }else{beep(false);fb.className="feedback";fb.textContent="";setTimeout(()=>{openC.forEach(o=>{o.classList.remove("open");o.textContent="?"});openC=[];lock=false},1100)}
+  });
+}
+function gBalloon(u,box){
+  const W4=u.w.map(W);const rounds=shuffle([...W4,...W4]);let r=0,score=0,first=true;
+  const colors=["#FF7A7A","#FFC94A","#7CC8FF","#9BE38A"];
+  function round(){
+    if(r>=rounds.length){const st=score>=7?3:score>=5?2:1;setBest(u.n,"g2",st,3);return gameEnd(box,"Bắn bóng bay",score+"/"+rounds.length,st,"Điểm tính khi bé bấm đúng ngay lần đầu.",()=>gBalloon(u,box))}
+    const w=rounds[r],opts=shuffle(W4);first=true;
+    box.innerHTML=`<div class="exbox"><div class="exhead"><h3>Bắn bóng bay</h3><span class="score">${r+1}/${rounds.length} · ⭐ ${score}</span></div>
+      <div class="hint"><button class="mini-say" id="ls" aria-label="Nghe lại">🔊</button><span class="muted" style="font-weight:700">Nghe rồi bấm vào quả bóng đúng</span></div>
+      <div class="sky">${opts.map((o,k)=>`<button class="bl" data-k="${k}" style="background:${colors[k]}">${picHTML(o.pic)}</button>`).join("")}</div>
+      <div class="feedback" id="fb"></div></div>`;
+    const say=()=>speak(w.en);$("#ls",box).onclick=say;setTimeout(say,300);const fb=$("#fb",box);
+    box.querySelectorAll(".bl").forEach(b=>b.onclick=()=>{
+      if(b.disabled)return;
+      if(opts[b.dataset.k].en===w.en){if(first)score++;b.classList.add("pop");beep(true);box.querySelectorAll(".bl").forEach(x=>x.disabled=true);
+        const p=PRAISE[Math.floor(Math.random()*PRAISE.length)];fb.className="feedback ok pop";fb.textContent="Pop! "+p;speak(p,0.9,()=>{r++;round()})}
+      else{first=false;beep(false);b.classList.remove("shake");void b.offsetWidth;b.classList.add("shake");fb.className="feedback no";fb.textContent="Try again! 💪"}
+    });
+  }
+  round();
+}
+function gTrueFalse(u,box){
+  const W4=u.w.map(W);let score=0,left=30,cur=null,busy=false,started=false;
+  box.innerHTML=`<div class="exbox"><div class="exhead"><h3>Đúng hay sai?</h3><span class="score" id="sc">⭐ 0 · ⏱ 30</span></div>
+    <p class="how">Nhìn hình, nghe từ. Đúng tên hình thì bấm ✓, sai thì bấm ✗. Có 30 giây!</p>
+    <div class="timer"><i id="bar" style="width:100%"></i></div>
+    <div id="stage" style="display:grid;gap:12px;justify-items:center"><button class="btn" id="go">▶ Bắt đầu</button></div></div>`;
+  const stage=$("#stage",box);
+  function next(){
+    const w=W4[Math.floor(Math.random()*4)];const truth=Math.random()<.5;
+    const shown=truth?w:shuffle(W4.filter(x=>x.en!==w.en))[0];cur={truth};
+    stage.innerHTML=`<div class="tfpic">${picHTML(w.pic)}</div><div class="tfword">${esc(shown.en)}</div>
+      <div class="tfbtns" style="width:100%"><button class="yes" data-a="1">✓ Đúng</button><button class="no" data-a="0">✗ Sai</button></div><div class="feedback" id="fb"></div>`;
+    speak(shown.en,0.85);busy=false;
+    stage.querySelectorAll(".tfbtns button").forEach(b=>b.onclick=()=>{
+      if(busy||left<=0)return;busy=true;const ok=(b.dataset.a==="1")===cur.truth;const fb=$("#fb",stage);
+      if(ok){score++;beep(true);fb.className="feedback ok pop";fb.textContent="Yes! ⭐"}else{beep(false);fb.className="feedback no";fb.textContent=cur.truth?"Đúng đấy!":"Sai rồi!"}
+      $("#sc",box).textContent="⭐ "+score+" · ⏱ "+left;setTimeout(next,ok?500:1100);
+    });
+  }
+  $("#go",box).onclick=()=>{if(started)return;started=true;next();clearInterval(window._gt);
+    window._gt=setInterval(()=>{left--;$("#bar",box)&&($("#bar",box).style.width=(left/30*100)+"%");const sc=$("#sc",box);if(sc)sc.textContent="⭐ "+score+" · ⏱ "+left;
+      if(left<=0){clearInterval(window._gt);const st=score>=10?3:score>=6?2:1;setBest(u.n,"g3",st,3);
+        gameEnd(box,"Đúng hay sai?",score+" điểm",st,"Trong 30 giây, được 10 điểm trở lên là 3 sao.",()=>gTrueFalse(u,box))}},1000)};
 }
 
 /* Tab 3 */
