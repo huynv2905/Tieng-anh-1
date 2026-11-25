@@ -242,6 +242,19 @@ details.note summary{font-weight:800;cursor:pointer;color:var(--teal);font-size:
 .gcard .gs{background:var(--teal-soft);border-radius:12px;padding:8px 14px;font-family:var(--display);font-size:24px;font-weight:800;line-height:1.2}
 .gcard .gv{color:var(--muted);font-size:15.5px}
 .gcard .pic{font-size:64px;height:76px}.gcard .pic.two{font-size:44px}.gcard .pic svg{width:70px;height:70px}
+.tabs.t7{grid-template-columns:repeat(4,1fr)}
+.tabs.t7 .tcls{grid-column:span 2}
+.tch{display:flex;gap:10px;align-items:flex-start;width:100%}
+.tch-face{font-size:58px;line-height:1;flex:none}
+.tch-bub{position:relative;flex:1;background:var(--tile);border-radius:18px;padding:12px 66px 12px 14px;text-align:left;min-height:70px}
+.tch-en{font-family:var(--display);font-size:22px;font-weight:800;line-height:1.25}
+.tch-vi{font-size:15px;color:var(--muted);margin-top:4px;font-weight:600}
+.tch-bub .mini-say{position:absolute;right:8px;top:8px}
+.tch-big{font-family:var(--display);font-size:72px;font-weight:900;color:var(--teal);line-height:1.1;text-transform:none}
+.tch-big.sm{font-size:28px}
+.tch-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%}
+.tch-opts .card .pic{font-size:64px;height:80px}
+.tch-opts .card .pic svg{width:76px;height:76px}
 .seg2{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:5px}
 .seg2 button{min-height:48px;border-radius:12px;font-weight:800}
 .seg2 button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
@@ -493,7 +506,7 @@ function renderHome(){
       <div class="voice">Giọng đang dùng: <b id="voiceName">đang tìm…</b></div>
       <div class="tools" style="margin-top:10px"><button class="btn small ghost" id="testVoice">🔊 Thử giọng</button></div>
     </details>
-    <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">Phiên bản 25/11 (bản 12) · đối chiếu sách Global Success</p>
+    <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">Phiên bản 25/11 (bản 13) · đối chiếu sách, thêm Lớp học với Teacher (Unit 1–10)</p>
   </div>`;
   pickVoice();
   $("#testVoice").onclick=()=>speak("Hello! Let's learn English.");
@@ -507,13 +520,14 @@ function renderUnit(n){
       <a class="back" href="#" aria-label="Về danh sách bài" style="color:inherit;text-decoration:none">‹</a>
       <div class="utitle"><div class="k">Unit ${u.n} · chữ <span class="bigL">${u.L}${u.L.toLowerCase()}</span></div><h2>${esc(u.en)}</h2></div>
     </div>
-    <div class="tabs" role="tablist">
+    <div class="tabs${n<=10?" t7":""}" role="tablist">
       <button role="tab" data-t="v" aria-selected="true">Từ vựng</button>
       <button role="tab" data-t="p" aria-selected="false">Mẫu câu</button>
       <button role="tab" data-t="s" aria-selected="false">Luyện nói</button>
       <button role="tab" data-t="x" aria-selected="false">Bài tập</button>
       <button role="tab" data-t="g" aria-selected="false">Trò chơi</button>
       <button role="tab" data-t="a" aria-selected="false">Nâng cao ✨</button>
+      ${n<=10?`<button role="tab" data-t="c" aria-selected="false" class="tcls">👩‍🏫 Lớp học</button>`:""}
     </div>
   </div>
   <div id="pane"></div>
@@ -523,7 +537,7 @@ function renderUnit(n){
   </nav>`;
   const tabs=[...app.querySelectorAll(".tabs button")];
   const show=t=>{speechSynthesis&&speechSynthesis.cancel();stopGames();tabs.forEach(b=>b.setAttribute("aria-selected",b.dataset.t===t));
-    ({v:tabVocab,p:tabPattern,s:tabSpeak,x:tabEx,g:tabGame,a:tabAdv})[t](u,$("#pane"))};
+    ({v:tabVocab,p:tabPattern,s:tabSpeak,x:tabEx,g:tabGame,a:tabAdv,c:tabClass})[t](u,$("#pane"))};
   tabs.forEach(b=>b.onclick=()=>show(b.dataset.t));
   show("v");
 }
@@ -732,6 +746,107 @@ function tabSpeak(u,el,qa){
   draw();
 }
 
+/* Tab Lớp học với Teacher (Unit 1–10) */
+function hearOnce(target,sent,onText){
+  /* trả về false nếu máy không nghe được (khi đó dùng nút "Con đã nói") */
+  if(DICT){let txt="",timer=null,offs=[];const clean=()=>{offs.forEach(f=>f());offs=[];clearTimeout(timer)};
+    const pr=DICT.start({language:"en"});
+    offs.push(DICT.onFinal(e=>{txt+=e.text;clearTimeout(timer);timer=setTimeout(()=>DICT.stop(),900)}));
+    offs.push(DICT.onState(e=>{if(e.state==="listening"){clearTimeout(timer);timer=setTimeout(()=>DICT.stop(),sent?6000:4000)}
+      if(e.state==="idle"){clean();onText(txt.trim()?[txt]:[],!!txt.trim())}}));
+    pr.catch(()=>{clean();onText(null)});return true}
+  if(!SR)return false;
+  let cands=[],spoke=false,fin=false;const done=()=>{if(fin)return;fin=true;onText(cands,spoke)};
+  try{const r=new SR();r.lang="en-US";r.interimResults=true;r.maxAlternatives=10;r.continuous=false;
+    r.onspeechstart=()=>{spoke=true};
+    r.onresult=e=>{spoke=true;let ok=false;for(let k=e.resultIndex;k<e.results.length;k++){cands.push(...[...e.results[k]].map(a=>a.transcript));if(e.results[k].isFinal)ok=true}if(ok){try{r.stop()}catch(_){}}};
+    r.onerror=e=>{if(e.error==="not-allowed"||e.error==="service-not-allowed"){fin=true;onText(null)}};
+    r.onend=done;r.start();setTimeout(()=>{try{r.stop()}catch(_){done()}},sent?8000:6000);setTimeout(done,(sent?8000:6000)+2500);
+  }catch(e){return false}
+  return true;
+}
+function classSteps(u){
+  const ws=u.w.map(w=>w[0]),S=[];
+  S.push({k:"talk",say:`Hello! I'm your teacher. Today we learn the letter ${u.L}.`,vi:`Xin chào! Cô là giáo viên của con. Hôm nay mình học chữ ${u.L}.`,big:`${u.L}${u.L.toLowerCase()}`});
+  S.push({k:"talk",say:`Unit ${u.n}. ${u.en}.`,vi:u.vi,big:`Unit ${u.n}`});
+  u.w.forEach(w=>{
+    S.push({k:"talk",say:`Look! ${w[0]}. ${w[0]}.`,vi:`Nhìn này! ${w[0]} nghĩa là ${w[3]}.`,pic:w[1],word:w[0]});
+    S.push({k:"say",say:`Say it with me: ${w[0]}.`,vi:`Con nói theo cô: ${w[0]}`,pic:w[1],word:w[0],t:w[0]});
+  });
+  S.push({k:"talk",say:"Let's play! Listen and touch the picture.",vi:"Mình chơi nhé! Con nghe cô nói rồi chạm vào hình đúng."});
+  shuffle(u.w).slice(0,3).forEach(w=>S.push({k:"tap",say:`Where is ${w[0]}? Touch it!`,vi:`${w[0]} ở đâu? Con chạm vào hình nhé!`,t:w[0],opts:shuffle(u.w)}));
+  const ex=u.p[0].ex.slice(0,2);
+  S.push({k:"talk",say:"Now, let's make a sentence.",vi:`Bây giờ mình nói cả câu. Mẫu câu: ${u.p[0].f}`,big:u.p[0].f,small:true});
+  ex.forEach(x=>{
+    const lw=x[0].toLowerCase(),w=u.w.find(w=>lw.includes(w[0].toLowerCase().replace(/s$/,"")))||u.w[0];
+    S.push({k:"talk",say:`Listen. ${x[0]}`,vi:x[1],pic:w[1],word:x[0]});
+    S.push({k:"say",say:`Say it with me: ${x[0]}`,vi:`Con nói cả câu: ${x[1]}`,pic:w[1],word:x[0],t:x[0],sent:true});
+  });
+  S.push({k:"talk",say:"Now I ask, you answer.",vi:"Bây giờ cô hỏi, con trả lời bằng cả câu nhé."});
+  shuffle(u.w).slice(0,2).forEach(w=>{const [q,a]=qaFor(u,w[0]);S.push({k:"say",say:q,vi:"Cô hỏi, con trả lời cả câu",pic:w[1],q,t:a,sent:true,qa:true})});
+  S.push({k:"bye"});
+  return S;
+}
+function tabClass(u,el){
+  const S=classSteps(u);let i=0,total=0,max=S.filter(s=>s.k==="say"||s.k==="tap").length*3;
+  const teacher=(txt,vi)=>`<div class="tch"><div class="tch-face" aria-hidden="true">👩‍🏫</div><div class="tch-bub"><div class="tch-en">${esc(txt)}</div><div class="tch-vi">${esc(vi||"")}</div><button class="mini-say" id="rep" aria-label="Nghe cô nói lại">🔊</button></div></div>`;
+  function draw(){
+    const s=S[i];
+    const head=`<div class="exhead" style="width:100%"><h3>👩‍🏫 Lớp học</h3><span class="score">${Math.min(i+1,S.length)}/${S.length} · ⭐ ${total}</span></div><div class="pbar" style="width:100%;height:14px"><i style="width:${Math.round(i/(S.length-1)*100)}%"></i></div>`;
+    if(s.k==="bye"){
+      const r=max?total/max:1,st=r>=.85?3:r>=.6?2:1,msg=st===3?"Excellent!":st===2?"Good job!":"Nice try!";
+      el.innerHTML=`<div class="pane"><div class="spk">${head}${teacher(`${msg} You did great today. Goodbye!`,"Con học giỏi lắm! Tạm biệt con, hẹn gặp lại!")}
+        <div class="result"><div class="stars">${"⭐".repeat(st)}</div><div class="big">${total}/${max}</div></div>
+        <button class="btn" id="again">↻ Học lại từ đầu</button></div></div>`;
+      setBest(u.n,"cl",total,max);
+      const say=()=>speak(`${msg} You did great today. Goodbye!`,0.8);$("#rep",el).onclick=say;setTimeout(say,300);
+      $("#again",el).onclick=()=>tabClass(u,el);return;
+    }
+    const txt=s.qa?s.q:s.say;
+    let body="";
+    if(s.big)body+=`<div class="tch-big${s.small?" sm":""}">${esc(s.big)}</div>`;
+    if(s.pic&&s.k!=="tap")body+=`<div class="bigpic">${picHTML(s.pic)}</div>`;
+    if(s.word&&s.k==="talk")body+=`<div class="target">${esc(s.word)}</div>`;
+    if(s.k==="tap")body+=`<div class="tch-opts">${s.opts.map(w=>`<button class="card" data-w="${esc(w[0])}">${picHTML(w[1])}</button>`).join("")}</div>`;
+    if(s.k==="say")body+=`${s.qa?"":`<div class="target">${esc(s.t)}</div>`}
+      <div class="tools" style="justify-content:center"><button class="btn small ghost" id="model">🔊 ${s.qa?"Câu trả lời mẫu":"Nghe lại"}</button></div>
+      ${s.qa?`<div class="target hidden" id="ans">${esc(s.t)}</div>`:""}
+      <button class="mic" id="mic" aria-label="Bấm để nói">🎤</button><div class="heard" id="heard">Bấm micro rồi nói</div>
+      <button class="btn small ghost" id="said">✓ Con đã nói xong</button>`;
+    body+=`<div class="feedback" id="fb" aria-live="polite"></div><button class="btn" id="next" ${s.k==="talk"?"":"hidden"}>Tiếp ›</button>`;
+    el.innerHTML=`<div class="pane"><div class="spk">${head}${teacher(txt,s.vi)}${body}</div></div>`;
+    const fb=$("#fb",el),nextB=$("#next",el);
+    const sayIt=()=>speak(txt,0.8);$("#rep",el).onclick=sayIt;setTimeout(sayIt,300);
+    nextB.onclick=()=>{speechSynthesis&&speechSynthesis.cancel();i++;draw()};
+    let done=false;
+    const award=(st,msg)=>{if(done)return;done=true;total+=st;
+      const p=msg||(st===3?PRAISE[Math.floor(Math.random()*PRAISE.length)]:"Good try!");
+      fb.className="feedback "+(st>=2?"ok":"no")+" pop";fb.textContent="⭐".repeat(st)+" "+p;
+      const a=$("#ans",el);if(a)a.classList.remove("hidden");
+      el.querySelectorAll("#mic,#said").forEach(b=>b.disabled=true);
+      speak(p,0.9);nextB.hidden=false};
+    if(s.k==="tap"){let miss=0;
+      el.querySelectorAll(".tch-opts .card").forEach(b=>b.onclick=()=>{if(done)return;
+        if(b.dataset.w===s.t){b.classList.add("on");award(miss?1:3)}
+        else{miss++;b.classList.add("shake");b.disabled=true;fb.className="feedback no";fb.textContent="Try again!";speak(`Try again. ${s.t}.`,0.8)}})}
+    if(s.k==="say"){
+      $("#model",el).onclick=()=>speak(s.t);
+      $("#said",el).onclick=()=>award(3);
+      const mic=$("#mic",el),heard=$("#heard",el);let busy=false;
+      mic.onclick=()=>{if(busy||done)return;busy=true;speechSynthesis&&speechSynthesis.cancel();
+        mic.classList.add("on");heard.textContent="Đang nghe… con nói đi!";
+        const ok=hearOnce(s.t,s.sent,(c,spoke)=>{busy=false;mic.classList.remove("on");
+          if(c===null){heard.textContent="Máy chưa dùng được micro. Con nói to rồi bấm \"Con đã nói xong\".";return}
+          c=c.filter(x=>x&&x.trim());
+          if(!c.length){if(spoke){heard.textContent="Cô nghe thấy con nói rồi!";award(2)}else heard.textContent="Cô chưa nghe rõ. Bấm micro và nói to hơn nhé.";return}
+          const sc=STRICT?autoStars:easyStars;let best=0,bt=c[0];c.forEach(x=>{const st=sc(x,s.t);if(st>best){best=st;bt=x}});
+          heard.textContent="Cô nghe được: \""+bt.trim()+"\"";award(Math.max(best,STRICT?1:2))});
+        if(!ok){busy=false;mic.classList.remove("on");heard.textContent="Máy này chưa nghe được. Con nói to rồi bấm \"Con đã nói xong\"."}
+      };
+    }
+  }
+  draw();
+}
 /* Tab Nâng cao */
 function tabAdv(u,el){
   el.innerHTML=`<div class="pane">
