@@ -244,6 +244,8 @@ details.note summary{font-weight:800;cursor:pointer;color:var(--teal);font-size:
 .gcard .pic{font-size:64px;height:76px}.gcard .pic.two{font-size:44px}.gcard .pic svg{width:70px;height:70px}
 .tabs.t7{grid-template-columns:repeat(4,1fr)}
 .tabs.t7 .tcls{grid-column:span 2}
+.stage3d{position:relative;width:100%;border-radius:18px;overflow:hidden;background:#d8efe9;min-height:220px;box-shadow:inset 0 0 0 1px var(--line)}
+.s2d{position:absolute;right:8px;top:8px;z-index:2;min-height:36px;padding:0 10px;font-size:13px;background:color-mix(in srgb,var(--surface) 85%,transparent)}
 .tch{display:flex;gap:10px;align-items:flex-start;width:100%}
 .tch-face{font-size:58px;line-height:1;flex:none}
 .tch-bub{position:relative;flex:1;background:var(--tile);border-radius:18px;padding:12px 66px 12px 14px;text-align:left;min-height:70px}
@@ -506,7 +508,7 @@ function renderHome(){
       <div class="voice">Giọng đang dùng: <b id="voiceName">đang tìm…</b></div>
       <div class="tools" style="margin-top:10px"><button class="btn small ghost" id="testVoice">🔊 Thử giọng</button></div>
     </details>
-    <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">Phiên bản 25/11 (bản 13) · đối chiếu sách, thêm Lớp học với Teacher (Unit 1–10)</p>
+    <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">Phiên bản 25/11 (bản 14) · cô giáo 3D thử ở Unit 1, Lớp học với Teacher (Unit 1–10)</p>
   </div>`;
   pickVoice();
   $("#testVoice").onclick=()=>speak("Hello! Let's learn English.");
@@ -765,13 +767,156 @@ function hearOnce(target,sent,onText){
   }catch(e){return false}
   return true;
 }
+/* ---------- Cô giáo 3D (Three.js, tự dựng bằng khối cơ bản) ---------- */
+const T3={ok:null,running:false,acts:[],talkUntil:0,holdName:null,fx:[]};
+T3.webgl=()=>{try{const c=document.createElement("canvas");return !!(window.WebGLRenderingContext&&(c.getContext("webgl")||c.getContext("experimental-webgl")))}catch(e){return false}};
+T3.ensure=function(){
+  if(T3.ok!==null)return Promise.resolve(T3.ok);
+  if(!T3.webgl()){T3.ok=false;return Promise.resolve(false)}
+  return new Promise(res=>{
+    const go=()=>{try{T3.build();T3.ok=true}catch(e){console.warn(e);T3.ok=false}res(T3.ok)};
+    if(window.THREE)return go();
+    const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
+    s.onload=go;s.onerror=()=>{T3.ok=false;res(false)};document.head.appendChild(s);
+    setTimeout(()=>{if(T3.ok===null&&!window.THREE){T3.ok=false;res(false)}},15000);
+  });
+};
+T3.build=function(){
+  const T=THREE,sc=new T.Scene();T3.scene=sc;
+  const R=new T.WebGLRenderer({antialias:true,powerPreference:"low-power"});
+  R.setPixelRatio(Math.min(window.devicePixelRatio||1,1.75));T3.R=R;
+  R.domElement.setAttribute("aria-label","Cô giáo 3D");R.domElement.style.display="block";R.domElement.style.width="100%";
+  const cam=new T.PerspectiveCamera(36,1.4,0.1,50);cam.position.set(0,1.6,4.7);cam.lookAt(0,1.3,0);T3.cam=cam;
+  sc.background=new T.Color(0xd8efe9);
+  sc.add(new T.HemisphereLight(0xffffff,0xe9d2b4,0.75));
+  const dl=new T.DirectionalLight(0xffffff,0.55);dl.position.set(2.5,5,4);sc.add(dl);
+  const M=c=>new T.MeshToonMaterial({color:c});
+  const mesh=(g,m,x=0,y=0,z=0,p=sc)=>{const o=new T.Mesh(g,m);o.position.set(x,y,z);p.add(o);return o};
+  const tex=(w,h,draw)=>{const c=document.createElement("canvas");c.width=w;c.height=h;draw(c.getContext("2d"),w,h);const t=new T.CanvasTexture(c);t._c=c;t._draw=draw;return t};
+  /* lớp học */
+  const floor=mesh(new T.PlaneGeometry(14,8),M(0xe8c99a),0,0,0);floor.rotation.x=-Math.PI/2;
+  mesh(new T.PlaneGeometry(14,6),M(0xcfeee4),0,3,-2.6);
+  mesh(new T.BoxGeometry(14,0.5,0.05),M(0xa7dccb),0,0.25,-2.57);
+  /* bảng */
+  mesh(new T.BoxGeometry(2.5,1.25,0.06),M(0xb07a45),-1.05,2.05,-2.52);
+  const bt=tex(512,240,(g,w,h,txt)=>{g.fillStyle="#2f6b4f";g.fillRect(0,0,w,h);g.fillStyle="rgba(255,255,255,.92)";g.textAlign="center";g.textBaseline="middle";
+    const s=T3.boardText||"Bb";g.font=`bold ${Math.min(130,Math.floor(900/Math.max(1,s.length)))}px "Baloo 2","Trebuchet MS",sans-serif`;g.fillText(s,w/2,h/2+6);
+    g.font="bold 26px sans-serif";g.fillStyle="rgba(255,255,255,.55)";g.fillText("Unit 1",62,26)});
+  T3.boardTex=bt;
+  mesh(new T.PlaneGeometry(2.32,1.08),new T.MeshBasicMaterial({map:bt}),-1.05,2.05,-2.485);
+  mesh(new T.BoxGeometry(2.5,0.06,0.16),M(0xb07a45),-1.05,1.4,-2.45);
+  /* cửa sổ */
+  mesh(new T.BoxGeometry(1.3,1.2,0.06),M(0xffffff),1.75,2.05,-2.53);
+  mesh(new T.PlaneGeometry(1.14,1.04),new T.MeshBasicMaterial({color:0x9fd8ff}),1.75,2.05,-2.495);
+  mesh(new T.BoxGeometry(0.05,1.06,0.04),M(0xffffff),1.75,2.05,-2.47);mesh(new T.BoxGeometry(1.16,0.05,0.04),M(0xffffff),1.75,2.05,-2.47);
+  mesh(new T.SphereGeometry(0.16,16,12),new T.MeshBasicMaterial({color:0xffe066}),2.12,2.38,-2.48).scale.z=0.1;
+  /* bàn */
+  const desk=new T.Group();desk.position.set(-1.45,0,0.2);sc.add(desk);
+  mesh(new T.BoxGeometry(1.1,0.08,0.6),M(0xc98b4f),0,0.62,0,desk);
+  [[-.48,-.24],[.48,-.24],[-.48,.24],[.48,.24]].forEach(([x,z])=>mesh(new T.CylinderGeometry(0.035,0.035,0.62,8),M(0x8a5a2b),x,0.31,z,desk));
+  mesh(new T.SphereGeometry(0.09,16,12),M(0xff5a5a),0.25,0.73,0,desk);
+  mesh(new T.BoxGeometry(0.3,0.05,0.22),M(0x4a8cff),-0.2,0.69,0.02,desk);
+  /* bóng dưới chân */
+  const sh=mesh(new T.CircleGeometry(0.55,32),new T.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.12}),0.5,0.005,0);sh.rotation.x=-Math.PI/2;
+  /* cô giáo chibi */
+  const skin=M(0xffd9bf),hairM=M(0x4a2c22),dress=M(0xff7a8a),white=M(0xffffff);
+  const tg=new T.Group();tg.position.x=0.5;tg.rotation.y=-0.12;sc.add(tg);T3.tg=tg;
+  [-1,1].forEach(s=>{mesh(new T.CylinderGeometry(0.075,0.07,0.34,12),skin,s*0.12,0.2,0,tg);const shoe=mesh(new T.SphereGeometry(0.1,16,10),M(0x3b4bd8),s*0.12,0.04,0.04,tg);shoe.scale.set(1,0.55,1.4)});
+  mesh(new T.CylinderGeometry(0.2,0.42,0.62,24),dress,0,0.62,0,tg);
+  const torso=mesh(new T.SphereGeometry(0.25,20,14),dress,0,0.93,0,tg);torso.scale.set(1,0.75,0.85);
+  mesh(new T.TorusGeometry(0.13,0.03,8,24),white,0,1.04,0.04,tg).rotation.x=Math.PI/2.3;
+  const hp=new T.Group();hp.position.set(0,1.05,0);tg.add(hp);T3.head=hp;
+  const head=mesh(new T.SphereGeometry(0.5,32,24),skin,0,0.47,0,hp);head.scale.set(1.05,0.96,0.95);
+  const cap=mesh(new T.SphereGeometry(0.545,32,20,0,Math.PI*2,0,Math.PI*0.5),hairM,0,0.5,-0.04,hp);cap.rotation.x=-0.5;
+  mesh(new T.SphereGeometry(0.5,24,16),hairM,0,0.47,-0.12,hp).scale.set(1.06,1,0.9);
+  for(let k=-2;k<=2;k++){const b=mesh(new T.SphereGeometry(0.15,14,10),hairM,k*0.16,0.84-Math.abs(k)*0.05,0.27-Math.abs(k)*0.05,hp);b.scale.set(1.2,0.6,0.7)}
+  [-1,1].forEach(s=>{const sd=mesh(new T.SphereGeometry(0.15,14,12),hairM,s*0.48,0.28,-0.02,hp);sd.scale.set(0.7,1.5,0.9)});
+  mesh(new T.SphereGeometry(0.2,18,14),hairM,0,1.0,-0.22,hp);
+  const bow=M(0xffd23f);[-1,1].forEach(s=>{const b=mesh(new T.ConeGeometry(0.08,0.16,10),bow,0.28+s*0.08,0.88,0.12,hp);b.rotation.z=s*Math.PI/2});mesh(new T.SphereGeometry(0.04,10,8),bow,0.28,0.88,0.13,hp);
+  T3.eyes=[-1,1].map(s=>{const g=new T.Group();g.position.set(s*0.18,0.46,0.44);hp.add(g);
+    const e=mesh(new T.SphereGeometry(0.075,16,12),M(0x2b1a14),0,0,0,g);e.scale.set(1,1.3,0.55);
+    mesh(new T.SphereGeometry(0.024,8,6),new T.MeshBasicMaterial({color:0xffffff}),0.025,0.04,0.04,g);return g});
+  [-1,1].forEach(s=>{const c=mesh(new T.SphereGeometry(0.075,14,10),new T.MeshBasicMaterial({color:0xff9aa8,transparent:true,opacity:0.55}),s*0.31,0.33,0.4,hp);c.scale.set(1.2,0.7,0.3)});
+  T3.mouth=mesh(new T.SphereGeometry(0.055,16,12),M(0xb0304a),0,0.24,0.455,hp);T3.mouth.scale.set(1.6,0.4,0.5);
+  T3.smile=mesh(new T.TorusGeometry(0.06,0.016,8,20,Math.PI),M(0x8a2a3a),0,0.27,0.455,hp);T3.smile.rotation.z=Math.PI;
+  T3.arms=[-1,1].map(s=>{const p=new T.Group();p.position.set(s*0.27,1.0,0);tg.add(p);
+    const a=mesh(new T.CylinderGeometry(0.06,0.055,0.4,12),dress,0,-0.2,0,p);
+    const h=mesh(new T.SphereGeometry(0.08,14,10),skin,0,-0.43,0,p);p.userData={s,h};return p});
+  /* đồ vật của bài */
+  const ballT=tex(256,128,(g,w,h)=>{const cs=["#ff4d4d","#ffffff","#3d8bff","#ffd23f","#3ccf7a","#ffffff"];cs.forEach((c,i)=>{g.fillStyle=c;g.fillRect(i*w/6,0,w/6+1,h)})});
+  const ball=new T.Mesh(new T.SphereGeometry(0.17,28,20),new T.MeshToonMaterial({map:ballT}));
+  const bookT=tex(128,160,(g,w,h)=>{g.fillStyle="#3d6bff";g.fillRect(0,0,w,h);g.fillStyle="#ffd23f";g.fillRect(14,20,w-28,40);g.fillStyle="#3d6bff";g.font="bold 30px sans-serif";g.textAlign="center";g.fillText("BOOK",w/2,52);g.fillStyle="#fff";g.font="bold 54px sans-serif";g.fillText("Bb",w/2,125)});
+  const cov=new T.MeshToonMaterial({map:bookT}),pg=M(0xfffbf0),sp=M(0x2a4fd0);
+  const book=new T.Mesh(new T.BoxGeometry(0.3,0.38,0.07),[pg,sp,pg,pg,cov,sp]);
+  const bike=new T.Group();const red=M(0xff4d4d),blk=M(0x222222);
+  [-1,1].forEach(s=>mesh(new T.TorusGeometry(0.11,0.02,8,24),blk,s*0.18,0,0,bike));
+  const bar=(x1,y1,x2,y2)=>{const l=Math.hypot(x2-x1,y2-y1),c=mesh(new T.CylinderGeometry(0.016,0.016,l,8),red,(x1+x2)/2,(y1+y2)/2,0,bike);c.rotation.z=Math.atan2(y2-y1,x2-x1)-Math.PI/2};
+  bar(-0.18,0,0,0.02);bar(0,0.02,0.12,0.16);bar(-0.18,0,-0.06,0.16);bar(-0.06,0.16,0.12,0.16);bar(0.12,0.16,0.18,0);bar(0.12,0.16,0.14,0.24);
+  const seat=mesh(new T.BoxGeometry(0.09,0.025,0.05),blk,-0.07,0.19,0,bike);
+  mesh(new T.CylinderGeometry(0.012,0.012,0.14,8),blk,0.14,0.24,0,bike).rotation.x=Math.PI/2;
+  T3.objs={ball,book,bike};Object.values(T3.objs).forEach(o=>{o.visible=false;sc.add(o)});
+  T3.clock=new T.Clock();T3.nextBlink=1.5;
+};
+T3.board=function(s){if(!T3.ok)return;s=s||"Bb";if(T3.boardText===s)return;T3.boardText=s;const t=T3.boardTex,c=t._c;t._draw(c.getContext("2d"),c.width,c.height);t.needsUpdate=true};
+T3.hold=function(w){if(!T3.ok)return;const k=w&&w.toLowerCase();T3.holdName=T3.objs[k]?k:null;Object.entries(T3.objs).forEach(([n,o])=>o.visible=n===T3.holdName)};
+T3.act=function(n,dur){if(!T3.ok)return;const now=T3.clock.getElapsedTime();T3.acts=T3.acts.filter(a=>a.n!==n&&!(n!=="nod"&&a.n!=="nod"));T3.acts.push({n,t0:now,t1:now+(dur||({wave:2.2,nod:0.9,clap:1.8,head:3,shake:0.9,tclap:3})[n]||1.5)})};
+T3.talk=function(text,rate){if(!T3.ok)return;T3.talkUntil=T3.clock.getElapsedTime()+Math.max(0.8,text.length*0.075/(rate||0.8))};
+T3.fire=function(){if(!T3.ok)return;const T=THREE;
+  for(let b=0;b<4;b++){const n=90,pos=new Float32Array(n*3),col=new Float32Array(n*3),vel=[];
+    const cx=-1.6+Math.random()*3.2,cy=2.3+Math.random()*0.7,cz=-1.2+Math.random()*0.8;
+    const base=new T.Color().setHSL(Math.random(),1,0.6);
+    for(let i=0;i<n;i++){pos.set([cx,cy,cz],i*3);const c=base.clone().offsetHSL((Math.random()-.5)*.15,0,0);col.set([c.r,c.g,c.b],i*3);
+      const th=Math.random()*Math.PI*2,ph=Math.acos(2*Math.random()-1),sp=1.2+Math.random()*0.9;vel.push([Math.sin(ph)*Math.cos(th)*sp,Math.cos(ph)*sp,Math.sin(ph)*Math.sin(th)*sp])}
+    const g=new T.BufferGeometry();g.setAttribute("position",new T.BufferAttribute(pos,3));g.setAttribute("color",new T.BufferAttribute(col,3));
+    const p=new T.Points(g,new T.PointsMaterial({size:0.16,vertexColors:true,transparent:true,depthWrite:false,map:T3.dot||(T3.dot=new T.CanvasTexture((()=>{const c=document.createElement("canvas");c.width=c.height=32;const g=c.getContext("2d");g.fillStyle="#fff";g.beginPath();g.arc(16,16,14,0,7);g.fill();return c})())),alphaTest:0.3}));
+    T3.scene.add(p);T3.fx.push({p,vel,t0:T3.clock.getElapsedTime()+b*0.25,started:false});p.visible=false}
+};
+T3.celebrate=function(){T3.act("clap");T3.fire()};
+T3.mount=function(host){if(!T3.ok||!host)return;const c=T3.R.domElement;host.appendChild(c);
+  const w=host.clientWidth||340,h=Math.round(Math.min(300,Math.max(220,w*0.72)));T3.R.setSize(w,h,false);c.style.height=h+"px";T3.cam.aspect=w/h;T3.cam.updateProjectionMatrix();
+  if(!T3.running){T3.running=true;requestAnimationFrame(T3.loop)}};
+T3.loop=function(){
+  if(!T3.R.domElement.isConnected||document.hidden){T3.running=false;if(document.hidden)document.addEventListener("visibilitychange",()=>{if(T3.R.domElement.isConnected&&!T3.running){T3.running=true;requestAnimationFrame(T3.loop)}},{once:true});return}
+  const t=T3.clock.getElapsedTime();
+  const tg=T3.tg,hp=T3.head,[aR,aL]=T3.arms;
+  /* tư thế mặc định */
+  tg.position.y=Math.sin(t*2)*0.015;hp.rotation.set(0,Math.sin(t*0.7)*0.08,Math.sin(t*0.9)*0.05);
+  aR.rotation.set(0,0,-0.22+Math.sin(t*1.6)*0.04);aL.rotation.set(0,0,0.22-Math.sin(t*1.6)*0.04);
+  if(T3.holdName){aR.rotation.set(-0.55,0,-1.05)}
+  T3.acts=T3.acts.filter(a=>t<a.t1);
+  T3.acts.forEach(a=>{if(t<a.t0)return;const k=t-a.t0,e=Math.min(1,k/0.25,(a.t1-t)/0.25);
+    if(a.n==="wave"){aR.rotation.set(-0.25*e,0,-0.22+(-2.05+0.22)*e+Math.sin(k*11)*0.35*e)}
+    if(a.n==="nod"){hp.rotation.x=Math.sin(k*Math.PI*2/0.45)*0.22*e}
+    if(a.n==="shake"){hp.rotation.y=Math.sin(k*Math.PI*2/0.45)*0.3*e}
+    if(a.n==="clap"||a.n==="tclap"){const o=0.42+Math.sin(k*16)*0.16;aR.rotation.set(-1.25*e,0,(-0.22)*(1-e)+o*e);aL.rotation.set(-1.25*e,0,0.22*(1-e)-o*e);tg.position.y+=Math.abs(Math.sin(k*8))*0.04*e}
+    if(a.n==="head"){aR.rotation.set(-0.2*e,0,-0.22+(-2.62+0.22)*e);aL.rotation.set(-0.2*e,0,0.22+(2.62-0.22)*e);hp.rotation.x=0.08*e}
+  });
+  /* chớp mắt */
+  if(t>T3.nextBlink){const k=t-T3.nextBlink;const s=k<0.07?1-k/0.07*0.9:k<0.14?0.1+(k-0.07)/0.07*0.9:1;T3.eyes.forEach(g=>g.scale.y=Math.max(0.1,s));if(k>=0.14){T3.eyes.forEach(g=>g.scale.y=1);T3.nextBlink=t+2.2+Math.random()*2.5}}
+  /* miệng */
+  const talking=t<T3.talkUntil||(window.speechSynthesis&&speechSynthesis.speaking);
+  if(talking){T3.mouth.visible=true;T3.smile.visible=false;T3.mouth.scale.y=0.35+Math.abs(Math.sin(t*13))*0.9+Math.abs(Math.sin(t*7.3))*0.3;hp.position.y=1.05+Math.abs(Math.sin(t*6.5))*0.008}
+  else{T3.mouth.visible=false;T3.smile.visible=true;hp.position.y=1.05}
+  /* đồ vật trên tay */
+  if(T3.holdName){const o=T3.objs[T3.holdName],v=new THREE.Vector3();aR.userData.h.getWorldPosition(v);o.position.set(v.x-0.1,v.y+0.16,v.z+0.12);o.rotation.y=t*1.6;o.rotation.x=Math.sin(t)*0.2}
+  /* pháo hoa */
+  T3.fx=T3.fx.filter(f=>{const k=t-f.t0;if(k<0)return true;f.p.visible=true;
+    if(k>1.6){T3.scene.remove(f.p);f.p.geometry.dispose();f.p.material.dispose();return false}
+    const a=f.p.geometry.attributes.position;for(let i=0;i<f.vel.length;i++){const v=f.vel[i];v[1]-=2.2*0.016;v[0]*=0.985;v[1]*=0.985;v[2]*=0.985;a.array[i*3]+=v[0]*0.016;a.array[i*3+1]+=v[1]*0.016;a.array[i*3+2]+=v[2]*0.016}
+    a.needsUpdate=true;f.p.material.opacity=Math.max(0,1-k/1.6);return true});
+  T3.R.render(T3.scene,T3.cam);requestAnimationFrame(T3.loop);
+};
 function classSteps(u){
   const ws=u.w.map(w=>w[0]),S=[];
   S.push({k:"talk",say:`Hello! I'm your teacher. Today we learn the letter ${u.L}.`,vi:`Xin chào! Cô là giáo viên của con. Hôm nay mình học chữ ${u.L}.`,big:`${u.L}${u.L.toLowerCase()}`});
   S.push({k:"talk",say:`Unit ${u.n}. ${u.en}.`,vi:u.vi,big:`Unit ${u.n}`});
+  if(u.n===1){
+    S.push({k:"tpr",say:"Let's move! Clap your hands! Clap, clap, clap!",vi:"Mình vận động nhé! Con vỗ tay theo cô nào!",act:"tclap",big:"👏",board:"Clap your hands"});
+    S.push({k:"tpr",say:"Touch your head! Touch your head!",vi:"Con chạm tay lên đầu giống cô nhé!",act:"head",big:"🙆",board:"Touch your head"});
+  }
   u.w.forEach(w=>{
-    S.push({k:"talk",say:`Look! ${w[0]}. ${w[0]}.`,vi:`Nhìn này! ${w[0]} nghĩa là ${w[3]}.`,pic:w[1],word:w[0]});
-    S.push({k:"say",say:`Say it with me: ${w[0]}.`,vi:`Con nói theo cô: ${w[0]}`,pic:w[1],word:w[0],t:w[0]});
+    S.push({k:"talk",say:`Look! ${w[0]}. ${w[0]}.`,vi:`Nhìn này! ${w[0]} nghĩa là ${w[3]}.`,pic:w[1],word:w[0],obj:w[0]});
+    S.push({k:"say",say:`Say it with me: ${w[0]}.`,vi:`Con nói theo cô: ${w[0]}`,pic:w[1],word:w[0],t:w[0],obj:w[0]});
   });
   S.push({k:"talk",say:"Let's play! Listen and touch the picture.",vi:"Mình chơi nhé! Con nghe cô nói rồi chạm vào hình đúng."});
   shuffle(u.w).slice(0,3).forEach(w=>S.push({k:"tap",say:`Where is ${w[0]}? Touch it!`,vi:`${w[0]} ở đâu? Con chạm vào hình nhé!`,t:w[0],opts:shuffle(u.w)}));
@@ -783,29 +928,43 @@ function classSteps(u){
     S.push({k:"say",say:`Say it with me: ${x[0]}`,vi:`Con nói cả câu: ${x[1]}`,pic:w[1],word:x[0],t:x[0],sent:true});
   });
   S.push({k:"talk",say:"Now I ask, you answer.",vi:"Bây giờ cô hỏi, con trả lời bằng cả câu nhé."});
-  shuffle(u.w).slice(0,2).forEach(w=>{const [q,a]=qaFor(u,w[0]);S.push({k:"say",say:q,vi:"Cô hỏi, con trả lời cả câu",pic:w[1],q,t:a,sent:true,qa:true})});
+  shuffle(u.w).slice(0,2).forEach(w=>{const [q,a]=qaFor(u,w[0]);S.push({k:"say",say:q,vi:"Cô hỏi, con trả lời cả câu",pic:w[1],q,t:a,sent:true,qa:true,obj:w[0]})});
   S.push({k:"bye"});
   return S;
 }
-function tabClass(u,el){
+function tabClass(u,el,ready){
+  let P2D=false;try{P2D=localStorage.getItem("ta1-2d")==="1"}catch(e){}
+  const can3D=u.n===1;
+  if(can3D&&!P2D&&!ready){
+    el.innerHTML=`<div class="pane"><div class="spk"><div class="tch-big sm">👩‍🏫</div><p class="muted">Đang mở lớp học 3D…</p></div></div>`;
+    const tok=el._clsTok=(el._clsTok||0)+1;
+    T3.ensure().then(()=>{if(el._clsTok===tok&&el.isConnected)tabClass(u,el,true)});return;
+  }
+  const D3=can3D&&!P2D&&T3.ok;
   const S=classSteps(u);let i=0,total=0,max=S.filter(s=>s.k==="say"||s.k==="tap").length*3;
-  const teacher=(txt,vi)=>`<div class="tch"><div class="tch-face" aria-hidden="true">👩‍🏫</div><div class="tch-bub"><div class="tch-en">${esc(txt)}</div><div class="tch-vi">${esc(vi||"")}</div><button class="mini-say" id="rep" aria-label="Nghe cô nói lại">🔊</button></div></div>`;
+  const modeBtn=can3D&&!D3?`<div class="tools" style="justify-content:flex-end;width:100%;margin:0"><button class="btn small ghost" id="m2d">${D3?"🖼️ Chế độ 2D":"🧊 Chế độ 3D"}</button></div>${can3D&&!P2D&&!T3.ok?`<p class="muted" style="margin:0;font-size:14px">Máy này chưa mở được 3D nên đang dùng 2D.</p>`:""}`:"";
+  const teacher=(txt,vi)=>D3?`<div class="stage3d" id="stage"><button class="btn small ghost s2d" id="m2d">🖼️ Chế độ 2D</button></div><div class="tch-bub" style="width:100%"><div class="tch-en">${esc(txt)}</div><div class="tch-vi">${esc(vi||"")}</div><button class="mini-say" id="rep" aria-label="Nghe cô nói lại">🔊</button></div>`:`<div class="tch"><div class="tch-face" aria-hidden="true">👩‍🏫</div><div class="tch-bub"><div class="tch-en">${esc(txt)}</div><div class="tch-vi">${esc(vi||"")}</div><button class="mini-say" id="rep" aria-label="Nghe cô nói lại">🔊</button></div></div>`;
+  function bindMode(){const b=$("#m2d",el);if(b)b.onclick=()=>{speechSynthesis&&speechSynthesis.cancel();try{localStorage.setItem("ta1-2d",D3?"1":"0")}catch(e){};
+    tabClass(u,el,D3)}}
   function draw(){
     const s=S[i];
-    const head=`<div class="exhead" style="width:100%"><h3>👩‍🏫 Lớp học</h3><span class="score">${Math.min(i+1,S.length)}/${S.length} · ⭐ ${total}</span></div><div class="pbar" style="width:100%;height:14px"><i style="width:${Math.round(i/(S.length-1)*100)}%"></i></div>`;
+    const head=`<div class="exhead" style="width:100%"><h3>👩‍🏫 Lớp học</h3><span class="score">${Math.min(i+1,S.length)}/${S.length} · ⭐ ${total}</span></div><div class="pbar" style="width:100%;height:14px"><i style="width:${Math.round(i/(S.length-1)*100)}%"></i></div>${modeBtn}`;
     if(s.k==="bye"){
       const r=max?total/max:1,st=r>=.85?3:r>=.6?2:1,msg=st===3?"Excellent!":st===2?"Good job!":"Nice try!";
       el.innerHTML=`<div class="pane"><div class="spk">${head}${teacher(`${msg} You did great today. Goodbye!`,"Con học giỏi lắm! Tạm biệt con, hẹn gặp lại!")}
         <div class="result"><div class="stars">${"⭐".repeat(st)}</div><div class="big">${total}/${max}</div></div>
         <button class="btn" id="again">↻ Học lại từ đầu</button></div></div>`;
-      setBest(u.n,"cl",total,max);
-      const say=()=>speak(`${msg} You did great today. Goodbye!`,0.8);$("#rep",el).onclick=say;setTimeout(say,300);
+      setBest(u.n,"cl",total,max);bindMode();
+      if(D3){T3.mount($("#stage",el));T3.hold(null);T3.board("Goodbye!");T3.act("wave",3);if(st>=2)T3.fire()}
+      const say=()=>{speak(`${msg} You did great today. Goodbye!`,0.8);D3&&T3.talk(`${msg} You did great today. Goodbye!`)};$("#rep",el).onclick=say;setTimeout(say,300);
       $("#again",el).onclick=()=>tabClass(u,el);return;
     }
     const txt=s.qa?s.q:s.say;
     let body="";
-    if(s.big)body+=`<div class="tch-big${s.small?" sm":""}">${esc(s.big)}</div>`;
-    if(s.pic&&s.k!=="tap")body+=`<div class="bigpic">${picHTML(s.pic)}</div>`;
+    const held=D3&&s.obj&&T3.objs[s.obj.toLowerCase()];
+    if(s.big&&!D3)body+=`<div class="tch-big${s.small?" sm":""}">${esc(s.big)}</div>`;
+    if(s.pic&&s.k!=="tap"&&!held)body+=`<div class="bigpic">${picHTML(s.pic)}</div>`;
+    if(s.k==="tpr")body+=`<div class="tools" style="justify-content:center"><button class="btn small ghost" id="again1">🔁 Cô làm lại</button><button class="btn small" id="did">✓ Con làm rồi</button></div>`;
     if(s.word&&s.k==="talk")body+=`<div class="target">${esc(s.word)}</div>`;
     if(s.k==="tap")body+=`<div class="tch-opts">${s.opts.map(w=>`<button class="card" data-w="${esc(w[0])}">${picHTML(w[1])}</button>`).join("")}</div>`;
     if(s.k==="say")body+=`${s.qa?"":`<div class="target">${esc(s.t)}</div>`}
@@ -816,7 +975,15 @@ function tabClass(u,el){
     body+=`<div class="feedback" id="fb" aria-live="polite"></div><button class="btn" id="next" ${s.k==="talk"?"":"hidden"}>Tiếp ›</button>`;
     el.innerHTML=`<div class="pane"><div class="spk">${head}${teacher(txt,s.vi)}${body}</div></div>`;
     const fb=$("#fb",el),nextB=$("#next",el);
-    const sayIt=()=>speak(txt,0.8);$("#rep",el).onclick=sayIt;setTimeout(sayIt,300);
+    bindMode();
+    if(D3){const stg=$("#stage",el);T3.mount(stg);T3.hold(s.obj||null);
+      if(i>0){const top=($(".top")||{}).offsetHeight||0;const y=stg.getBoundingClientRect().top+window.scrollY-top-8;if(Math.abs(window.scrollY-y)>40)window.scrollTo({top:y,behavior:"smooth"})}
+      T3.board(s.board||s.word||s.obj||(s.k==="tap"?"?":s.big&&s.big.length<24&&!s.big.startsWith("Unit")?s.big:"Bb"));
+      if(i===0)setTimeout(()=>T3.act("wave",2.6),200);
+      if(s.k==="tpr")setTimeout(()=>T3.act(s.act),400);}
+    const sayIt=()=>{speak(txt,0.8);D3&&T3.talk(txt)};$("#rep",el).onclick=sayIt;setTimeout(sayIt,300);
+    if(s.k==="tpr"){$("#again1",el).onclick=()=>{sayIt();D3&&T3.act(s.act)};
+      $("#did",el).onclick=()=>{fb.className="feedback ok pop";fb.textContent="👍 Great!";speak("Great!",0.9);if(D3){T3.talk("Great!");T3.act("nod")}nextB.hidden=false}}
     nextB.onclick=()=>{speechSynthesis&&speechSynthesis.cancel();i++;draw()};
     let done=false;
     const award=(st,msg)=>{if(done)return;done=true;total+=st;
@@ -824,13 +991,13 @@ function tabClass(u,el){
       fb.className="feedback "+(st>=2?"ok":"no")+" pop";fb.textContent="⭐".repeat(st)+" "+p;
       const a=$("#ans",el);if(a)a.classList.remove("hidden");
       el.querySelectorAll("#mic,#said").forEach(b=>b.disabled=true);
-      speak(p,0.9);nextB.hidden=false};
+      speak(p,0.9);if(D3){T3.talk(p,0.9);st>=2?T3.celebrate():T3.act("nod")}nextB.hidden=false};
     if(s.k==="tap"){let miss=0;
       el.querySelectorAll(".tch-opts .card").forEach(b=>b.onclick=()=>{if(done)return;
         if(b.dataset.w===s.t){b.classList.add("on");award(miss?1:3)}
-        else{miss++;b.classList.add("shake");b.disabled=true;fb.className="feedback no";fb.textContent="Try again!";speak(`Try again. ${s.t}.`,0.8)}})}
+        else{miss++;b.classList.add("shake");b.disabled=true;fb.className="feedback no";fb.textContent="Try again!";speak(`Try again. ${s.t}.`,0.8);if(D3){T3.talk("Try again");T3.act("shake")}}})}
     if(s.k==="say"){
-      $("#model",el).onclick=()=>speak(s.t);
+      $("#model",el).onclick=()=>{speak(s.t);D3&&T3.talk(s.t)};
       $("#said",el).onclick=()=>award(3);
       const mic=$("#mic",el),heard=$("#heard",el);let busy=false;
       mic.onclick=()=>{if(busy||done)return;busy=true;speechSynthesis&&speechSynthesis.cancel();
