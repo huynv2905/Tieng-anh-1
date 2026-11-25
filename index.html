@@ -513,7 +513,7 @@ function renderHome(){
       <div class="voice">Giọng đang dùng: <b id="voiceName">đang tìm…</b></div>
       <div class="tools" style="margin-top:10px"><button class="btn small ghost" id="testVoice">🔊 Thử giọng</button></div>
     </details>
-    <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">Phiên bản 25/11 (bản 15) · cô giáo 3D có phụ đề Anh – Việt ở Unit 1, Lớp học với Teacher (Unit 1–10)</p>
+    <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">Phiên bản 25/11 (bản 16) · sửa micro Lớp học nghe được nhiều lần, Lớp học với Teacher (Unit 1–10)</p>
   </div>`;
   pickVoice();
   $("#testVoice").onclick=()=>speak("Hello! Let's learn English.");
@@ -763,15 +763,35 @@ function hearOnce(target,sent,onText){
       if(e.state==="idle"){clean();onText(txt.trim()?[txt]:[],!!txt.trim())}}));
     pr.catch(()=>{clean();onText(null)});return true}
   if(!SR)return false;
-  let cands=[],spoke=false,fin=false;const done=()=>{if(fin)return;fin=true;onText(cands,spoke)};
-  try{const r=new SR();r.lang="en-US";r.interimResults=true;r.maxAlternatives=10;r.continuous=false;
-    r.onspeechstart=()=>{spoke=true};
-    r.onresult=e=>{spoke=true;let ok=false;for(let k=e.resultIndex;k<e.results.length;k++){cands.push(...[...e.results[k]].map(a=>a.transcript));if(e.results[k].isFinal)ok=true}if(ok){try{r.stop()}catch(_){}}};
-    r.onerror=e=>{if(e.error==="not-allowed"||e.error==="service-not-allowed"){fin=true;onText(null)}};
-    r.onend=done;r.start();setTimeout(()=>{try{r.stop()}catch(_){done()}},sent?8000:6000);setTimeout(done,(sent?8000:6000)+2500);
-  }catch(e){return false}
+  /* iPhone: dùng lại MỘT bộ nhận giọng cho mọi lượt, hủy lượt cũ trước khi nghe lượt mới,
+     và chờ giọng cô đọc dừng hẳn rồi mới mở micro (iOS không nghe được khi loa vừa phát). */
+  const id=++HEAR.id;let cands=[],spoke=false,fin=false,got=false,timers=[];
+  const done=()=>{if(fin||id!==HEAR.id)return;fin=true;timers.forEach(clearTimeout);HEAR.busy=false;onText(cands,spoke)};
+  const r=HEAR.r||(HEAR.r=new SR());
+  try{if(HEAR.busy)r.abort()}catch(_){}
+  r.lang="en-US";r.interimResults=true;r.maxAlternatives=10;r.continuous=false;
+  r.onstart=r.onaudiostart=()=>{if(id===HEAR.id)got=true};
+  r.onspeechstart=()=>{if(id===HEAR.id)spoke=true};
+  r.onresult=e=>{if(id!==HEAR.id)return;spoke=true;let ok=false;for(let k=e.resultIndex;k<e.results.length;k++){cands.push(...[...e.results[k]].map(a=>a.transcript));if(e.results[k].isFinal)ok=true}if(ok){try{r.stop()}catch(_){}}};
+  r.onerror=e=>{if(id!==HEAR.id)return;if(e.error==="not-allowed"||e.error==="service-not-allowed"){fin=true;timers.forEach(clearTimeout);HEAR.busy=false;onText(null)}};
+  r.onend=()=>{if(id===HEAR.id)done()};
+  const lim=sent?8000:6000;
+  const go=(retry)=>{if(fin||id!==HEAR.id)return;
+    try{HEAR.busy=true;r.start()}catch(e){
+      /* lượt trước chưa đóng hẳn: hủy rồi thử lại một lần */
+      if(!retry){try{r.abort()}catch(_){}timers.push(setTimeout(()=>go(true),350));return}
+      HEAR.r=null;fin=true;HEAR.busy=false;onText([],false);return}
+    timers.push(setTimeout(()=>{try{r.stop()}catch(_){}},lim));
+    timers.push(setTimeout(()=>{try{r.abort()}catch(_){}done()},lim+2500));
+    /* không thấy micro mở sau 3 giây: lượt sau tạo bộ nhận giọng mới */
+    timers.push(setTimeout(()=>{if(!got&&!spoke&&!fin)HEAR.r=null},3000));
+  };
+  const tts=window.speechSynthesis&&(speechSynthesis.speaking||speechSynthesis.pending);
+  if(window.speechSynthesis)speechSynthesis.cancel();
+  if(tts)timers.push(setTimeout(()=>go(false),400));else go(false);
   return true;
 }
+const HEAR={id:0,r:null,busy:false};
 /* ---------- Cô giáo 3D (Three.js, tự dựng bằng khối cơ bản) ---------- */
 const T3={ok:null,running:false,acts:[],talkUntil:0,holdName:null,fx:[]};
 T3.webgl=()=>{try{const c=document.createElement("canvas");return !!(window.WebGLRenderingContext&&(c.getContext("webgl")||c.getContext("experimental-webgl")))}catch(e){return false}};
