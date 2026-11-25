@@ -245,6 +245,11 @@ details.note summary{font-weight:800;cursor:pointer;color:var(--teal);font-size:
 .tabs.t7{grid-template-columns:repeat(4,1fr)}
 .tabs.t7 .tcls{grid-column:span 2}
 .stage3d{position:relative;width:100%;border-radius:18px;overflow:hidden;background:#d8efe9;min-height:220px;box-shadow:inset 0 0 0 1px var(--line)}
+.s3say{position:absolute;left:8px;top:8px;z-index:2;width:44px;height:44px;font-size:19px}
+.sub3{background:#1f2b30;color:#fff;padding:10px 12px;min-height:74px;text-align:center;pointer-events:none}
+.sub3:empty,.sub3 .sub-en:empty+.sub-vi:empty{display:none}
+.sub-en{font-family:var(--display);font-size:20px;font-weight:800;line-height:1.25}
+.sub-vi{font-size:15px;font-weight:700;color:#ffe58a;margin-top:2px;line-height:1.3}
 .s2d{position:absolute;right:8px;top:8px;z-index:2;min-height:36px;padding:0 10px;font-size:13px;background:color-mix(in srgb,var(--surface) 85%,transparent)}
 .tch{display:flex;gap:10px;align-items:flex-start;width:100%}
 .tch-face{font-size:58px;line-height:1;flex:none}
@@ -508,7 +513,7 @@ function renderHome(){
       <div class="voice">Giọng đang dùng: <b id="voiceName">đang tìm…</b></div>
       <div class="tools" style="margin-top:10px"><button class="btn small ghost" id="testVoice">🔊 Thử giọng</button></div>
     </details>
-    <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">Phiên bản 25/11 (bản 14) · cô giáo 3D thử ở Unit 1, Lớp học với Teacher (Unit 1–10)</p>
+    <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">Phiên bản 25/11 (bản 15) · cô giáo 3D có phụ đề Anh – Việt ở Unit 1, Lớp học với Teacher (Unit 1–10)</p>
   </div>`;
   pickVoice();
   $("#testVoice").onclick=()=>speak("Hello! Let's learn English.");
@@ -872,7 +877,7 @@ T3.fire=function(){if(!T3.ok)return;const T=THREE;
     T3.scene.add(p);T3.fx.push({p,vel,t0:T3.clock.getElapsedTime()+b*0.25,started:false});p.visible=false}
 };
 T3.celebrate=function(){T3.act("clap");T3.fire()};
-T3.mount=function(host){if(!T3.ok||!host)return;const c=T3.R.domElement;host.appendChild(c);
+T3.mount=function(host){if(!T3.ok||!host)return;const c=T3.R.domElement;host.insertBefore(c,host.querySelector(".sub3"));
   const w=host.clientWidth||340,h=Math.round(Math.min(300,Math.max(220,w*0.72)));T3.R.setSize(w,h,false);c.style.height=h+"px";T3.cam.aspect=w/h;T3.cam.updateProjectionMatrix();
   if(!T3.running){T3.running=true;requestAnimationFrame(T3.loop)}};
 T3.loop=function(){
@@ -932,6 +937,14 @@ function classSteps(u){
   S.push({k:"bye"});
   return S;
 }
+const VIQ={"What's this?":"Đây là cái gì?","What's your name?":"Bạn tên là gì?","Hi! What's your name?":"Chào bạn! Bạn tên là gì?",
+  "Great job!":"Giỏi lắm!","Excellent!":"Xuất sắc!","Well done!":"Làm tốt lắm!","Super!":"Siêu quá!","Good job!":"Con làm tốt lắm!","Awesome!":"Hay quá!","Fantastic!":"Tuyệt vời!",
+  "Good try!":"Con cố gắng tốt lắm!","Great!":"Giỏi quá!","Try again":"Con thử lại nhé!"};
+function viFor(u,en,fb){if(VIQ[en])return VIQ[en];
+  let m=en.match(/^It's an? (.+)\.$/i);if(m){const w=u.w.find(x=>x[0].toLowerCase()===m[1].toLowerCase());if(w)return "Đó là "+w[3]+"."}
+  m=en.match(/^(?:Hi, )?I'm (\w+)\.$/);if(m)return (en.startsWith("Hi")?"Chào bạn, ":"")+"Mình là "+m[1]+".";
+  for(const p of u.p)for(const x of p.ex)if(x[0]===en)return x[1];
+  return fb||""}
 function tabClass(u,el,ready){
   let P2D=false;try{P2D=localStorage.getItem("ta1-2d")==="1"}catch(e){}
   const can3D=u.n===1;
@@ -943,7 +956,7 @@ function tabClass(u,el,ready){
   const D3=can3D&&!P2D&&T3.ok;
   const S=classSteps(u);let i=0,total=0,max=S.filter(s=>s.k==="say"||s.k==="tap").length*3;
   const modeBtn=can3D&&!D3?`<div class="tools" style="justify-content:flex-end;width:100%;margin:0"><button class="btn small ghost" id="m2d">${D3?"🖼️ Chế độ 2D":"🧊 Chế độ 3D"}</button></div>${can3D&&!P2D&&!T3.ok?`<p class="muted" style="margin:0;font-size:14px">Máy này chưa mở được 3D nên đang dùng 2D.</p>`:""}`:"";
-  const teacher=(txt,vi)=>D3?`<div class="stage3d" id="stage"><button class="btn small ghost s2d" id="m2d">🖼️ Chế độ 2D</button></div><div class="tch-bub" style="width:100%"><div class="tch-en">${esc(txt)}</div><div class="tch-vi">${esc(vi||"")}</div><button class="mini-say" id="rep" aria-label="Nghe cô nói lại">🔊</button></div>`:`<div class="tch"><div class="tch-face" aria-hidden="true">👩‍🏫</div><div class="tch-bub"><div class="tch-en">${esc(txt)}</div><div class="tch-vi">${esc(vi||"")}</div><button class="mini-say" id="rep" aria-label="Nghe cô nói lại">🔊</button></div></div>`;
+  const teacher=(txt,vi)=>D3?`<div class="stage3d" id="stage"><button class="btn small ghost s2d" id="m2d">🖼️ Chế độ 2D</button><button class="mini-say s3say" id="rep" aria-label="Nghe cô nói lại">🔊</button><div class="sub3" id="sub3" aria-live="polite"><div class="sub-en"></div><div class="sub-vi"></div></div></div>`:`<div class="tch"><div class="tch-face" aria-hidden="true">👩‍🏫</div><div class="tch-bub"><div class="tch-en">${esc(txt)}</div><div class="tch-vi">${esc(vi||"")}</div><button class="mini-say" id="rep" aria-label="Nghe cô nói lại">🔊</button></div></div>`;
   function bindMode(){const b=$("#m2d",el);if(b)b.onclick=()=>{speechSynthesis&&speechSynthesis.cancel();try{localStorage.setItem("ta1-2d",D3?"1":"0")}catch(e){};
     tabClass(u,el,D3)}}
   function draw(){
@@ -956,7 +969,7 @@ function tabClass(u,el,ready){
         <button class="btn" id="again">↻ Học lại từ đầu</button></div></div>`;
       setBest(u.n,"cl",total,max);bindMode();
       if(D3){T3.mount($("#stage",el));T3.hold(null);T3.board("Goodbye!");T3.act("wave",3);if(st>=2)T3.fire()}
-      const say=()=>{speak(`${msg} You did great today. Goodbye!`,0.8);D3&&T3.talk(`${msg} You did great today. Goodbye!`)};$("#rep",el).onclick=say;setTimeout(say,300);
+      const say=()=>{speak(`${msg} You did great today. Goodbye!`,0.8);if(D3){T3.talk(`${msg} You did great today. Goodbye!`);const b=$("#sub3",el);if(b){b.querySelector(".sub-en").textContent=`${msg} You did great today. Goodbye!`;b.querySelector(".sub-vi").textContent=`${VIQ[msg]||""} Hôm nay con học giỏi lắm. Tạm biệt con!`}}};$("#rep",el).onclick=say;setTimeout(say,300);
       $("#again",el).onclick=()=>tabClass(u,el);return;
     }
     const txt=s.qa?s.q:s.say;
@@ -981,9 +994,10 @@ function tabClass(u,el,ready){
       T3.board(s.board||s.word||s.obj||(s.k==="tap"?"?":s.big&&s.big.length<24&&!s.big.startsWith("Unit")?s.big:"Bb"));
       if(i===0)setTimeout(()=>T3.act("wave",2.6),200);
       if(s.k==="tpr")setTimeout(()=>T3.act(s.act),400);}
-    const sayIt=()=>{speak(txt,0.8);D3&&T3.talk(txt)};$("#rep",el).onclick=sayIt;setTimeout(sayIt,300);
+    const sub=(en,vi)=>{const b=$("#sub3",el);if(!b)return;b.querySelector(".sub-en").textContent=en;b.querySelector(".sub-vi").textContent=vi;b.classList.remove("pop");void b.offsetWidth;b.classList.add("pop")};
+    const sayIt=()=>{speak(txt,0.8);if(D3){T3.talk(txt);sub(txt,s.qa?viFor(u,txt,s.vi):s.vi)}};$("#rep",el).onclick=sayIt;setTimeout(sayIt,300);
     if(s.k==="tpr"){$("#again1",el).onclick=()=>{sayIt();D3&&T3.act(s.act)};
-      $("#did",el).onclick=()=>{fb.className="feedback ok pop";fb.textContent="👍 Great!";speak("Great!",0.9);if(D3){T3.talk("Great!");T3.act("nod")}nextB.hidden=false}}
+      $("#did",el).onclick=()=>{fb.className="feedback ok pop";fb.textContent="👍 Great!";speak("Great!",0.9);if(D3){T3.talk("Great!");sub("Great!","Giỏi quá!");T3.act("nod")}nextB.hidden=false}}
     nextB.onclick=()=>{speechSynthesis&&speechSynthesis.cancel();i++;draw()};
     let done=false;
     const award=(st,msg)=>{if(done)return;done=true;total+=st;
@@ -991,13 +1005,13 @@ function tabClass(u,el,ready){
       fb.className="feedback "+(st>=2?"ok":"no")+" pop";fb.textContent="⭐".repeat(st)+" "+p;
       const a=$("#ans",el);if(a)a.classList.remove("hidden");
       el.querySelectorAll("#mic,#said").forEach(b=>b.disabled=true);
-      speak(p,0.9);if(D3){T3.talk(p,0.9);st>=2?T3.celebrate():T3.act("nod")}nextB.hidden=false};
+      speak(p,0.9);if(D3){T3.talk(p,0.9);sub(p,viFor(u,p,""));st>=2?T3.celebrate():T3.act("nod")}nextB.hidden=false};
     if(s.k==="tap"){let miss=0;
       el.querySelectorAll(".tch-opts .card").forEach(b=>b.onclick=()=>{if(done)return;
         if(b.dataset.w===s.t){b.classList.add("on");award(miss?1:3)}
-        else{miss++;b.classList.add("shake");b.disabled=true;fb.className="feedback no";fb.textContent="Try again!";speak(`Try again. ${s.t}.`,0.8);if(D3){T3.talk("Try again");T3.act("shake")}}})}
+        else{miss++;b.classList.add("shake");b.disabled=true;fb.className="feedback no";fb.textContent="Try again!";speak(`Try again. ${s.t}.`,0.8);if(D3){T3.talk("Try again");sub(`Try again. ${s.t}.`,"Con thử lại nhé! Tìm hình "+s.t+".");T3.act("shake")}}})}
     if(s.k==="say"){
-      $("#model",el).onclick=()=>{speak(s.t);D3&&T3.talk(s.t)};
+      $("#model",el).onclick=()=>{speak(s.t);if(D3){T3.talk(s.t);sub(s.t,viFor(u,s.t,s.qa?"Câu trả lời mẫu":s.vi))}};
       $("#said",el).onclick=()=>award(3);
       const mic=$("#mic",el),heard=$("#heard",el);let busy=false;
       mic.onclick=()=>{if(busy||done)return;busy=true;speechSynthesis&&speechSynthesis.cancel();
