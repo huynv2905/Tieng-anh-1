@@ -158,6 +158,12 @@ details.note summary{font-weight:800;cursor:pointer;color:var(--teal);font-size:
 .spk .target{font-family:var(--display);font-size:34px;font-weight:800;line-height:1.15}
 .spk .target.hidden{color:transparent;text-shadow:0 0 14px var(--muted)}
 .mic{width:110px;height:110px;border-radius:50%;background:var(--teal);color:var(--surface);font-size:46px;display:grid;place-items:center;box-shadow:0 6px 0 color-mix(in srgb,var(--teal) 60%,#000)}
+.diag{font-size:13px;margin-top:6px}.diag summary{font-weight:800;color:var(--muted);cursor:pointer;padding:6px 0}
+.diag-info{white-space:pre-wrap;font-size:12.5px;color:var(--muted);margin:6px 0}
+.diag pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--tile);border-radius:10px;padding:8px;max-height:260px;overflow:auto;margin:6px 0 0}
+.lvl{width:180px;max-width:70%;height:10px;border-radius:5px;background:color-mix(in srgb,var(--teal) 18%,var(--surface));overflow:hidden;margin-top:-4px}
+.lvl i{display:block;height:100%;width:0;background:var(--teal);border-radius:5px;transition:width .06s}
+.mic{transition:transform .06s}
 .mic.on{background:var(--bad);animation:pulse 1s infinite}
 @keyframes pulse{50%{transform:scale(1.08)}}
 .heard{font-size:16px;color:var(--muted);min-height:24px}
@@ -513,7 +519,7 @@ function renderHome(){
       <div class="voice">Giọng đang dùng: <b id="voiceName">đang tìm…</b></div>
       <div class="tools" style="margin-top:10px"><button class="btn small ghost" id="testVoice">🔊 Thử giọng</button></div>
     </details>
-    <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">Phiên bản 25/11 (bản 16) · sửa micro Lớp học nghe được nhiều lần, Lớp học với Teacher (Unit 1–10)</p>
+    <p class="muted" style="font-size:13px;text-align:center;margin-top:14px">Phiên bản 27/11 (bản 17) · micro mới cho iPhone + bảng Kiểm tra micro, Lớp học với Teacher (Unit 1–10)</p>
   </div>`;
   pickVoice();
   $("#testVoice").onclick=()=>speak("Hello! Let's learn English.");
@@ -616,6 +622,82 @@ function easyStars(heard,target){
 let SOLO=false;try{SOLO=localStorage.getItem("ta1-srsolo")==="1"}catch(e){}
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition||null;
 const CAN_REC=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
+/* ---------- Bảng kiểm tra micro (để tìm lỗi trên iPhone) ---------- */
+const DIAG={lines:[],log(m){const t=new Date().toTimeString().slice(0,8);this.lines.push(t+"  "+m);if(this.lines.length>40)this.lines.shift();const e=document.getElementById("diagLog");if(e)e.textContent=this.lines.join("\n")}};
+function diagHTML(){return `<details class="diag" id="diag"><summary>🔧 Kiểm tra micro (nếu lỗi, chụp màn hình phần này gửi Claude)</summary>
+  <div id="diagInfo" class="diag-info"></div>
+  <label class="toggle"><input type="checkbox" id="vadT" ${USE_VAD?"checked":""}> Dùng micro mới (tự nghe âm lượng, không cần nhận giọng của Safari)</label>
+  <pre id="diagLog">${esc(DIAG.lines.join("\n")||"Chưa có lần bấm micro nào.")}</pre></details>`}
+function bindDiag(el,rerender){const box=el.querySelector("#diag");if(!box)return;
+  const info=[`Máy: ${IOS?"iPhone/iPad":"khác"} · ${(navigator.userAgent.match(/(OS [\d_]+|Version\/[\d.]+|CriOS\/[\d.]+|Chrome\/[\d.]+)/g)||[]).join(" ")}`,
+    `Cách nghe: ${DICT?"dictation của Claude":USE_VAD?"micro mới (âm lượng)":"nhận giọng Safari"}`,
+    `Có nhận giọng (SpeechRecognition): ${SR?"có":"không"} · Ghi âm: ${window.MediaRecorder?"có":"không"} · AudioContext: ${(window.AudioContext||window.webkitAudioContext)?"có":"không"}`,
+    `Trang an toàn (https): ${window.isSecureContext?"có":"không"}`];
+  const di=box.querySelector("#diagInfo");di.textContent=info.join("\n");
+  try{navigator.permissions&&navigator.permissions.query({name:"microphone"}).then(r=>{di.textContent=info.join("\n")+"\nQuyền micro: "+r.state}).catch(()=>{di.textContent=info.join("\n")+"\nQuyền micro: máy không cho xem"})}catch(e){}
+  const t=box.querySelector("#vadT");t.onchange=()=>{USE_VAD=t.checked;try{localStorage.setItem("ta1-vad",USE_VAD?"1":"0")}catch(e){};DIAG.log("Đổi cách nghe: "+(USE_VAD?"micro mới":"nhận giọng Safari"));rerender()};
+  try{if(localStorage.getItem("ta1-diag-open")==="1")box.open=true}catch(e){}
+  box.ontoggle=()=>{try{localStorage.setItem("ta1-diag-open",box.open?"1":"0")}catch(e){}}}
+/* ---------- Micro cho iPhone: tự nghe tiếng bé bằng âm lượng (không dùng nhận giọng của Safari) ---------- */
+const IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+let USE_VAD=IOS;try{const v=localStorage.getItem("ta1-vad");if(v==="1")USE_VAD=true;if(v==="0")USE_VAD=false}catch(e){}
+const VMIC={cur:null,ctx:null};
+VMIC.ok=()=>!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
+VMIC.listen=function(o){
+  VMIC.stop(true);
+  const ses={stopped:false,done:false};VMIC.cur=ses;
+  const AC=window.AudioContext||window.webkitAudioContext;let ctx=null;
+  try{if(AC){ctx=VMIC.ctx||(VMIC.ctx=new AC());if(ctx.state!=="running"&&ctx.resume)ctx.resume()}}catch(e){ctx=null}
+  if(window.speechSynthesis)speechSynthesis.cancel();
+  DIAG.log("Micro mới: xin mở micro… (AudioContext "+(ctx?ctx.state:"không có")+")");
+  navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}}).then(stream=>{
+    if(ses.stopped){stream.getTracks().forEach(t=>t.stop());return}
+    const tr=stream.getAudioTracks()[0];DIAG.log("Đã mở micro: "+(tr?(tr.label||"micro")+" · "+tr.readyState+(tr.muted?" · BỊ TẮT TIẾNG":""):"không có track"));
+    ses.stream=stream;
+    let rec=null,chunks=[];
+    if(window.MediaRecorder){try{rec=new MediaRecorder(stream);rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};rec.start()}catch(e){rec=null}}
+    let an=null,buf=null;
+    if(ctx){try{if(ctx.state!=="running"&&ctx.resume)ctx.resume();const src=ctx.createMediaStreamSource(stream);an=ctx.createAnalyser();an.fftSize=1024;src.connect(an);buf=new Float32Array(an.fftSize);ses.src=src}catch(e){an=null}}
+    DIAG.log("Ghi âm: "+(rec?(rec.mimeType||"mặc định"):"không")+" · Đo âm lượng: "+(an?"có, ctx "+ctx.state:"không"));
+    const t0=performance.now();let floor=null,fl=[],voiced=0,firstV=0,lastV=0,last=t0,live=false,peak=0;
+    const maxMs=o.sent?9000:7000,silMs=o.sent?1300:950,waitMs=6500;
+    const fin=()=>{if(ses.done)return;ses.done=true;ses.stopped=true;clearTimeout(ses.tm);
+      const finish=()=>{stream.getTracks().forEach(t=>t.stop());try{ses.src&&ses.src.disconnect()}catch(e){}
+        const url=chunks.length?URL.createObjectURL(new Blob(chunks,{type:(rec&&rec.mimeType)||"audio/mp4"})):null;
+        /* không đo được âm lượng (analyser im lặng hoàn toàn) thì coi như bé đã nói, để bố mẹ nghe lại và chấm */
+        const measured=an&&live;
+        DIAG.log(`Kết quả: nền ${floor===null?"?":floor.toFixed(4)} · to nhất ${peak.toFixed(3)} · có tiếng ${Math.round(voiced)}ms · đo được ${measured?"có":"KHÔNG (âm lượng = 0)"} · bản ghi ${chunks.length?"có":"không"}`);
+        o.onDone({spoke:measured?voiced>=120:!!url,ms:measured?Math.round(voiced):(o.sent?800:400),url,measured})};
+      if(rec&&rec.state!=="inactive"){rec.onstop=finish;try{rec.stop()}catch(e){finish()}}else finish()};
+    ses.fin=fin;
+    const tick=()=>{if(ses.stopped)return;const now=performance.now(),dt=now-last;last=now;let rms=0;
+      if(an){an.getFloatTimeDomainData(buf);let s=0;for(let i=0;i<buf.length;i++)s+=buf[i]*buf[i];rms=Math.sqrt(s/buf.length);if(rms>0)live=true;if(rms>peak)peak=rms}
+      const el=now-t0;
+      if(el<250)fl.push(rms);
+      else{
+        if(floor===null)floor=fl.length?fl.reduce((a,b)=>a+b,0)/fl.length:0;
+        const thr=Math.max(0.01,Math.min(0.05,floor*2.5));
+        if(rms>thr){voiced+=dt;lastV=now;if(!firstV)firstV=now}
+        o.onLevel&&o.onLevel(Math.min(1,rms/Math.max(thr*5,0.06)));
+        if(!an||!live){if(el>(o.sent?4500:3500))return fin()}
+        else{
+          if(firstV&&voiced>=120&&now-lastV>silMs)return fin();
+          if(!firstV&&el>waitMs)return fin();
+        }
+        if(el>maxMs)return fin();
+      }
+      ses.tm=setTimeout(tick,40)};
+    tick();
+  }).catch(err=>{DIAG.log("LỖI mở micro: "+((err&&err.name)||"")+" "+((err&&err.message)||""));if(ses.stopped)return;ses.stopped=true;ses.done=true;o.onDone({error:(err&&err.name)||"error"})});
+  return true;
+};
+VMIC.stop=function(silent){const s=VMIC.cur;if(!s||s.done)return;
+  if(silent||!s.fin){s.stopped=true;s.done=true;clearTimeout(s.tm);try{s.stream&&s.stream.getTracks().forEach(t=>t.stop())}catch(e){}}
+  else s.fin()};
+VMIC.active=()=>!!(VMIC.cur&&!VMIC.cur.done);
+function vadStars(ms,sent){const need=sent?600:250;if(ms<120)return 0;if(STRICT)return ms>=need?3:2;return ms>=need*0.6?3:2}
+function lvlBar(mic,el){let lv=el.querySelector("#lvl");if(!lv){mic.insertAdjacentHTML("afterend",'<div class="lvl" id="lvl" aria-hidden="true"><i></i></div>');lv=el.querySelector("#lvl")}
+  return v=>{const i=lv.querySelector("i");if(i)i.style.width=Math.round(v*100)+"%";mic.style.transform=v?`scale(${1+v*0.18})`:""}}
 function tabSpeak(u,el,qa){
   const items=qa?shuffle(u.w).map(w=>{const [q,a]=qaFor(u,w[0]);return {t:a,q,pic:w[1],vi:"Bé trả lời cả câu",sent:true,qa:true}})
     :[...u.w.map(w=>({t:w[0],pic:w[1],vi:w[3]})),...u.p.flatMap(p=>p.ex).slice(0,2).map((x,k)=>({t:x[0],pic:u.w[k][1],vi:x[1],sent:true}))];
@@ -652,10 +734,10 @@ function tabSpeak(u,el,qa){
           <button data-s="2"><span>⭐⭐</span>Gần đúng</button>
           <button data-s="1"><span>⭐</span>Nói lại sau</button>
         </div>
-        ${auto?`<p class="how">${STRICT?"Chế độ chấm khó: phải nói gần giống người bản xứ mới được 3 sao.":"Chế độ chấm dễ: bé nói là có sao, nói gần đúng được 3 sao."} Nếu máy chưa nghe được, bố mẹ chấm bằng 3 nút trên.</p><label class="toggle" style="justify-content:center"><input type="checkbox" id="strict" ${STRICT?"checked":""}> Chấm khó (cho bé đã giỏi)</label><p hidden></p>`:""}
+        ${auto&&USE_VAD?`<p class="how">Trên iPhone, máy nghe xem bé có nói to và đủ dài không (vạch xanh dưới micro nhảy khi bé nói), chưa chấm được từng âm. Bấm ▶ nghe lại giọng bé, bố mẹ có thể chấm lại bằng 3 nút.</p>`:""}${auto?`<p class="how"${USE_VAD?" hidden":""}>${STRICT?"Chế độ chấm khó: phải nói gần giống người bản xứ mới được 3 sao.":"Chế độ chấm dễ: bé nói là có sao, nói gần đúng được 3 sao."} Nếu máy chưa nghe được, bố mẹ chấm bằng 3 nút trên.</p><label class="toggle" style="justify-content:center"><input type="checkbox" id="strict" ${STRICT?"checked":""}> Chấm khó (cho bé đã giỏi)</label><p hidden></p>`:""}
         <button class="btn" id="next" hidden>Tiếp ›</button>
-      </div></div>`;
-    $("#model",el).onclick=()=>speak(it.t);bindSeg();
+      </div>${auto?diagHTML():""}</div>`;
+    $("#model",el).onclick=()=>speak(it.t);bindSeg();bindDiag(el,()=>draw());
     if(it.qa){const ask=()=>speak(it.q,0.8);$("#askq",el).onclick=ask;setTimeout(ask,300)}
     const sk=$("#strict",el);if(sk)sk.onchange=()=>{STRICT=sk.checked;try{localStorage.setItem("ta1-strict",STRICT?"1":"0")}catch(e){};draw()};
     const pk=$("#peek",el);if(pk)pk.onclick=()=>{showWord=!showWord;$("#tg",el).classList.toggle("hidden",!showWord);pk.textContent=showWord?"Ẩn chữ":"Hiện chữ"};
@@ -710,6 +792,27 @@ function tabSpeak(u,el,qa){
       };
       return;
     }
+    if(USE_VAD&&VMIC.ok()){
+      const setLvl=lvlBar(mic,el);
+      mic.onclick=()=>{
+        if(done)return;if(VMIC.active()){VMIC.stop();return}
+        mic.classList.add("on");heard.textContent="Đang nghe… bé nói đi! Nói xong máy tự dừng.";fb.className="feedback";fb.textContent="";
+        VMIC.listen({sent:it.sent,onLevel:setLvl,onDone:r=>{
+          mic.classList.remove("on");setLvl(0);
+          if(r.error){parentTurn(r.error==="NotAllowedError"?"Trang chưa được dùng micro. Vào Cài đặt → Safari → Micrô → Cho phép, rồi tải lại trang. Tạm thời bố mẹ chấm bằng 3 nút.":"Chưa mở được micro. Bố mẹ chấm bằng 3 nút dưới nhé.");return}
+          if(r.url){if(audioURL)URL.revokeObjectURL(audioURL);audioURL=r.url;playB.hidden=false}
+          const st=r.spoke?vadStars(r.ms,it.sent):0;
+          if(!st){tries++;
+            if(tries>=2)parentTurn("Máy chưa nghe rõ tiếng bé."+(audioURL?" Bấm ▶ nghe lại,":"")+" rồi bố mẹ chấm bằng 3 nút dưới nhé.");
+            else heard.textContent="Máy chưa nghe thấy tiếng. Bé cầm điện thoại gần miệng, bấm micro và nói to hơn nhé.";return}
+          heard.textContent=r.measured?"Máy nghe thấy bé nói rồi! Bấm ▶ để nghe lại giọng bé.":"Đã ghi âm. Bấm ▶ nghe lại giọng bé.";
+          award(st);let given=st;
+          el.querySelectorAll("#rate button").forEach(b=>{b.disabled=false;b.onclick=()=>{const v=+b.dataset.s;total+=v-given;given=v;
+            fb.className="feedback "+(v>=2?"ok":"no");fb.textContent="⭐".repeat(v)+" (bố mẹ chấm)";el.querySelectorAll("#rate button").forEach(x=>x.disabled=true)}});
+        }});
+      };
+      return;
+    }
     /* native: nhận giọng (SpeechRecognition) + ghi âm (MediaRecorder) để nghe lại.
        Một số iPhone không nhận giọng khi đang ghi âm cùng lúc: nếu vậy tự chuyển sang chỉ nhận giọng (SOLO). */
     let busy=false;
@@ -726,7 +829,7 @@ function tabSpeak(u,el,qa){
         recd.onstop=()=>{if(stream)stream.getTracks().forEach(t=>t.stop());
           if(chunks.length){if(audioURL)URL.revokeObjectURL(audioURL);audioURL=URL.createObjectURL(new Blob(chunks,{type:recd.mimeType||"audio/mp4"}));playB.hidden=false}};
         recd.start();
-      }catch(e){stream=null;recd=null;if(!SR){mic.classList.remove("on");busy=false;heard.textContent="Chưa được dùng micro. Hãy cho phép micro cho trang này (Cài đặt → Safari → Micrô), hoặc bố mẹ chấm bằng 3 nút dưới.";return}}}
+      }catch(e){DIAG.log("LỖI mở micro để ghi âm: "+(e&&e.name));stream=null;recd=null;if(!SR){mic.classList.remove("on");busy=false;heard.textContent="Chưa được dùng micro. Hãy cho phép micro cho trang này (Cài đặt → Safari → Micrô), hoặc bố mẹ chấm bằng 3 nút dưới.";return}}}
       const finish=()=>{if(finished)return;finished=true;clearTimeout(timer);mic.classList.remove("on");busy=false;
         if(recd&&recd.state!=="inactive")setTimeout(()=>{try{recd.stop()}catch(e){}},250);
         if(srErr==="not-allowed"||srErr==="service-not-allowed"){parentTurn("Máy chưa được phép nhận giọng nói. Bật Cài đặt → Cài đặt chung → Bàn phím → Đọc chính tả. Tạm thời bố mẹ chấm bằng 3 nút.");return}
@@ -738,11 +841,13 @@ function tabSpeak(u,el,qa){
       if(SR){
         try{
           const rec=new SR();rec.lang="en-US";rec.interimResults=true;rec.maxAlternatives=10;rec.continuous=false;
-          rec.onspeechstart=()=>{gotSpeech=true};
+          DIAG.log("Nhận giọng Safari: bắt đầu"+(useRec?" (kèm ghi âm)":" (không ghi âm)"));
+          rec.onstart=()=>DIAG.log("SR: start");rec.onaudiostart=()=>DIAG.log("SR: có âm thanh vào");rec.onnomatch=()=>DIAG.log("SR: không khớp");
+          rec.onspeechstart=()=>{gotSpeech=true;DIAG.log("SR: nghe thấy tiếng nói")};
           rec.onresult=e=>{gotSpeech=true;for(let k=e.resultIndex;k<e.results.length;k++){const r=e.results[k];const alts=[...r].map(a=>a.transcript);heard.textContent="… "+alts[0];cands.push(...alts);if(r.isFinal)srOk=true}
             if(srOk){try{rec.stop()}catch(_){}}};
-          rec.onerror=e=>{srErr=e.error||"error"};
-          rec.onend=()=>finish();
+          rec.onerror=e=>{srErr=e.error||"error";DIAG.log("SR LỖI: "+srErr+(e.message?" "+e.message:""))};
+          rec.onend=()=>{DIAG.log("SR: kết thúc · "+cands.length+" kết quả"+(cands[0]?' "'+cands[0]+'"':""));finish()};
           rec.start();
           timer=setTimeout(()=>{try{rec.stop()}catch(_){finish()}},limit);
           setTimeout(finish,limit+3000);
@@ -770,11 +875,11 @@ function hearOnce(target,sent,onText){
   const r=HEAR.r||(HEAR.r=new SR());
   try{if(HEAR.busy)r.abort()}catch(_){}
   r.lang="en-US";r.interimResults=true;r.maxAlternatives=10;r.continuous=false;
-  r.onstart=r.onaudiostart=()=>{if(id===HEAR.id)got=true};
+  r.onstart=()=>{DIAG.log("SR: start");if(id===HEAR.id)got=true};r.onaudiostart=()=>{DIAG.log("SR: có âm thanh vào");if(id===HEAR.id)got=true};
   r.onspeechstart=()=>{if(id===HEAR.id)spoke=true};
   r.onresult=e=>{if(id!==HEAR.id)return;spoke=true;let ok=false;for(let k=e.resultIndex;k<e.results.length;k++){cands.push(...[...e.results[k]].map(a=>a.transcript));if(e.results[k].isFinal)ok=true}if(ok){try{r.stop()}catch(_){}}};
-  r.onerror=e=>{if(id!==HEAR.id)return;if(e.error==="not-allowed"||e.error==="service-not-allowed"){fin=true;timers.forEach(clearTimeout);HEAR.busy=false;onText(null)}};
-  r.onend=()=>{if(id===HEAR.id)done()};
+  r.onerror=e=>{DIAG.log("SR LỖI: "+e.error);if(id!==HEAR.id)return;if(e.error==="not-allowed"||e.error==="service-not-allowed"){fin=true;timers.forEach(clearTimeout);HEAR.busy=false;onText(null)}};
+  r.onend=()=>{DIAG.log("SR: kết thúc · "+cands.length+" kết quả"+(cands[0]?' "'+cands[0]+'"':""));if(id===HEAR.id)done()};
   const lim=sent?8000:6000;
   const go=(retry)=>{if(fin||id!==HEAR.id)return;
     try{HEAR.busy=true;r.start()}catch(e){
@@ -1006,7 +1111,8 @@ function tabClass(u,el,ready){
       <button class="mic" id="mic" aria-label="Bấm để nói">🎤</button><div class="heard" id="heard">Bấm micro rồi nói</div>
       <button class="btn small ghost" id="said">✓ Con đã nói xong</button>`;
     body+=`<div class="feedback" id="fb" aria-live="polite"></div><button class="btn" id="next" ${s.k==="talk"?"":"hidden"}>Tiếp ›</button>`;
-    el.innerHTML=`<div class="pane"><div class="spk">${head}${teacher(txt,s.vi)}${body}</div></div>`;
+    el.innerHTML=`<div class="pane"><div class="spk">${head}${teacher(txt,s.vi)}${body}</div>${s.k==="say"?diagHTML():""}</div>`;
+    bindDiag(el,()=>draw());
     const fb=$("#fb",el),nextB=$("#next",el);
     bindMode();
     if(D3){const stg=$("#stage",el);T3.mount(stg);T3.hold(s.obj||null);
@@ -1034,6 +1140,21 @@ function tabClass(u,el,ready){
       $("#model",el).onclick=()=>{speak(s.t);if(D3){T3.talk(s.t);sub(s.t,viFor(u,s.t,s.qa?"Câu trả lời mẫu":s.vi))}};
       $("#said",el).onclick=()=>award(3);
       const mic=$("#mic",el),heard=$("#heard",el);let busy=false;
+      if(USE_VAD&&VMIC.ok()){
+        const setLvl=lvlBar(mic,el);let tries=0,url=null;
+        mic.insertAdjacentHTML("beforebegin",'<button class="btn small" id="playk" hidden>▶ Nghe lại giọng con</button>');
+        const pk=$("#playk",el);pk.onclick=()=>{if(url){speechSynthesis&&speechSynthesis.cancel();new Audio(url).play().catch(()=>{})}};
+        mic.onclick=()=>{if(done)return;if(VMIC.active()){VMIC.stop();return}
+          mic.classList.add("on");heard.textContent="Cô đang nghe… con nói đi! Nói xong cô tự dừng.";
+          VMIC.listen({sent:s.sent,onLevel:setLvl,onDone:r=>{mic.classList.remove("on");setLvl(0);
+            if(r.error){heard.textContent=r.error==="NotAllowedError"?"Trang chưa được dùng micro (Cài đặt → Safari → Micrô). Con nói to rồi bấm \"Con đã nói xong\".":"Chưa mở được micro. Con nói to rồi bấm \"Con đã nói xong\".";return}
+            if(r.url){if(url)URL.revokeObjectURL(url);url=r.url;pk.hidden=false}
+            const st=r.spoke?vadStars(r.ms,s.sent):0;
+            if(!st){tries++;heard.textContent=tries>=2?"Cô chưa nghe rõ. Bố mẹ bấm ▶ nghe lại, đúng thì bấm \"Con đã nói xong\".":"Cô chưa nghe thấy. Con cầm điện thoại gần miệng, bấm micro và nói to hơn nhé.";return}
+            heard.textContent="Cô nghe thấy con nói rồi! Bấm ▶ để nghe lại giọng con.";award(st)}});
+        };
+        return;
+      }
       mic.onclick=()=>{if(busy||done)return;busy=true;speechSynthesis&&speechSynthesis.cancel();
         mic.classList.add("on");heard.textContent="Đang nghe… con nói đi!";
         const ok=hearOnce(s.t,s.sent,(c,spoke)=>{busy=false;mic.classList.remove("on");
@@ -1074,7 +1195,7 @@ function extraWords(u,box){
 
 /* Tab Trò chơi */
 let GTOKEN=0;
-function stopGames(){GTOKEN++;clearInterval(window._gt);cancelAnimationFrame(window._raf)}
+function stopGames(){try{VMIC.stop(true)}catch(e){}GTOKEN++;clearInterval(window._gt);cancelAnimationFrame(window._raf)}
 function sfx(kind){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(AC.destination);
   if(kind==="jump"){o.type="square";o.frequency.setValueAtTime(300,t);o.frequency.exponentialRampToValueAtTime(900,t+.18);g.gain.setValueAtTime(.08,t);g.gain.exponentialRampToValueAtTime(.001,t+.2);o.start(t);o.stop(t+.21)}
   else if(kind==="win"){[523,659,784,1047].forEach((f,k)=>{const o2=AC.createOscillator(),g2=AC.createGain();o2.type="triangle";o2.frequency.value=f;o2.connect(g2);g2.connect(AC.destination);g2.gain.setValueAtTime(.15,t+k*.12);g2.gain.exponentialRampToValueAtTime(.001,t+k*.12+.25);o2.start(t+k*.12);o2.stop(t+k*.12+.26)});o.start(t);o.stop(t)}
